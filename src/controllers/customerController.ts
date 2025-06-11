@@ -4,6 +4,10 @@ import { Customer } from '../entity/Customer';
 import { customerSchema } from '../utils/validators/inputValidator';
 import { Status } from '../entity/Customer';
 import bcrypt from 'bcryptjs';
+import { Subscription } from "../entity/Subscription";
+
+const customerRepo = AppDataSource.getRepository(Customer);
+const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
 export const createCustomer = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -34,9 +38,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.status = value.status as Status;
     customer.expirayDate = value.expirayDate || new Date(); // Default to current date
 
-    // Save to database
-    const customerRepository = AppDataSource.getRepository(Customer);
-    const savedCustomer = await customerRepository.save(customer);
+    const savedCustomer = await customerRepo.save(customer);
 
     return res.status(201).json({
       success: true,
@@ -51,4 +53,48 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
       message: 'Internal server error'
     });
   }
+};
+
+export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
+
+  const totalCustomers = await customerRepo.count();
+  const activeCustomers = await customerRepo.count({ where: { status: "Active" } });
+  const licenseExpiredCustomers = await customerRepo.count({ where: { status: "License Expired" } });
+  const inactiveCustomers = await customerRepo.count({
+    where: [{ status: "Trial" }, { status: "Free" }, { status: "License Expired" }]
+  });
+
+  const totalSubscriptions = await subscriptionRepo.count();
+
+  return res.json({
+    totalCustomers,
+    activeCustomers,
+    inactiveCustomers,
+    licenseExpiredCustomers,
+    totalSubscriptions,
+  });
+};
+
+
+export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
+
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+
+  const [customers, total] = await customerRepo.findAndCount({
+    skip: (page - 1) * limit,
+    take: limit,
+    order: {
+      createdAt: "DESC",
+    },
+    relations: ["subscriptions"], // if you want to include related subscriptions
+  });
+
+  return res.json({
+    data: customers,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    totalItems: total,
+  });
 };
