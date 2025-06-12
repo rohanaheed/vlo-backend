@@ -1,43 +1,31 @@
-import { Request, Response, NextFunction } from "express";
+import { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
+const JWT_SECRET = process.env.JWT_SECRET || "your_secret";
 
-interface DecodedToken {
-  id: number;
-  role: string;
-  iat?: number;
-  exp?: number;
-}
-
-declare module "express" {
-  interface Request {
-    user?: DecodedToken;
-  }
-}
-
-export const authorize = (roles: string[] = []) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const authorize = (roles?: string[]): RequestHandler => {
+  return (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing or malformed token" });
+      res.status(401).json({ message: "Unauthorized" });
+      return; // <== ✅ Return void here
     }
 
     try {
       const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken;
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: number; role: string };
 
-      // Role check if roles are specified
-      if (roles.length > 0 && !roles.includes(decoded.role)) {
-        return res.status(403).json({ message: "Forbidden: insufficient role" });
+      (req as any).user = decoded;
+
+      if (roles && !roles.includes(decoded.role)) {
+        res.status(403).json({ message: "Forbidden: insufficient role" });
+        return; // <== ✅ Return void
       }
 
-      req.user = decoded;
-      next();
+      next(); // <== ✅ Only next() if authorized
     } catch (err) {
-      console.error("JWT verification failed:", err);
-      return res.status(401).json({ message: "Invalid or expired token" });
+      res.status(401).json({ message: "Invalid token" });
     }
   };
 };

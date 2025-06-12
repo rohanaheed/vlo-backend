@@ -32,25 +32,25 @@ const router = Router();
 
 router.post(
   "/type/",
-  // authorize(["super-admin"]), // optional: restrict creation
+  authorize(["super_admin"]),
   validateRequest(businessTypeSchema),
   asyncHandler(createBusinessType)
 );
 
-router.get("/type/", asyncHandler(getAllBusinessTypes));
+router.get("/type/", authorize(["super_admin"]), asyncHandler(getAllBusinessTypes));
 
-router.get("/type/:id", asyncHandler(getBusinessTypeById));
+router.get("/type/:id", authorize(["super_admin"]), asyncHandler(getBusinessTypeById));
 
 router.put(
   "/type/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   validateRequest(businessTypeSchema),
   asyncHandler(updateBusinessType)
 );
 
 router.delete(
   "/type/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   asyncHandler(deleteBusinessType)
 );
 
@@ -61,25 +61,25 @@ router.delete(
 
 router.post(
   "/entity/",
-  // authorize(["super-admin"]), // optional: restrict creation
+  authorize(["super_admin"]),
   validateRequest(businessEntitySchema),
   asyncHandler(createBusinessEntity)
 );
 
-router.get("/entity/", asyncHandler(getAllBusinessEntities));
+router.get("/entity/", authorize(["super_admin"]), asyncHandler(getAllBusinessEntities));
 
-router.get("/entity/:id", asyncHandler(getBusinessEntityById));
+router.get("/entity/:id", authorize(["super_admin"]), asyncHandler(getBusinessEntityById));
 
 router.put(
   "/entity/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   validateRequest(businessEntitySchema),
   asyncHandler(updateBusinessEntity)
 );
 
 router.delete(
   "/entity/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   asyncHandler(deleteBusinessEntity)
 );
 
@@ -91,25 +91,25 @@ router.delete(
 
 router.post(
   "/area/",
-  // authorize(["super-admin"]), // optional: restrict creation
+  authorize(["super_admin"]),
   validateRequest(businessPracticeAreaSchema),
   asyncHandler(createPracticeArea)
 );
 
-router.get("/area/", asyncHandler(getAllPracticeAreas));
+router.get("/area/", authorize(["super_admin"]), asyncHandler(getAllPracticeAreas));
 
-router.get("/area/:id", asyncHandler(getPracticeAreaById));
+router.get("/area/:id", authorize(["super_admin"]), asyncHandler(getPracticeAreaById));
 
 router.put(
   "/area/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   validateRequest(businessPracticeAreaSchema),
   asyncHandler(updatePracticeArea)
 );
 
 router.delete(
   "/area/:id",
-  // authorize(["super-admin"]), // optional
+  authorize(["super_admin"]),
   asyncHandler(deletePracticeArea)
 );
 
