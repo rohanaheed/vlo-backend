@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes";
 import customerRoutes from "./routes/customerRoutes";
 import businessRoutes from "./routes/businessRoutes";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
+import paymentRoutes from "./routes/paymentRoutes";
 
 const app = express();
 app.use(express.json());
@@ -19,6 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/stripe", paymentRoutes);
 
 const PORT = process.env.PORT;
 

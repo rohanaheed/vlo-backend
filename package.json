@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.1",
     "reflect-metadata": "^0.2.2",
+    "stripe": "^18.2.1",
     "typeorm": "^0.3.24"
   },
   "devDependencies": {

@@ -6,6 +6,7 @@ import { Subscription } from "../entity/Subscription";
 import { BusinessType } from "../entity/BusinessType";
 import { BusinessEntity } from "../entity/BusniessEntity";
 import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
+import { Payment } from "../entity/payment";
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -16,5 +17,13 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME,
   synchronize: true,
   logging: false,
-  entities: [User, Customer, Subscription, BusinessEntity, BusinessType, BusinessPracticeArea]
+  entities: [
+    User,
+    Customer,
+    Subscription,
+    BusinessEntity,
+    BusinessType,
+    BusinessPracticeArea,
+    Payment
+  ]
 });
