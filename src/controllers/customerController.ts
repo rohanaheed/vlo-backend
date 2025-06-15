@@ -27,7 +27,6 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.lastName = value.lastName;
     customer.businessName = value.businessName;
     customer.tradingName = value.tradingName;
-    customer.subscription = value.subscription;
     customer.note = value.note || '';
     customer.businessSize = value.businessSize;
     customer.businessEntity = value.businessEntity;
@@ -37,6 +36,9 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.password = await bcrypt.hash(value.password, 10); // Note: You should hash this password!
     customer.status = value.status as Status;
     customer.expirayDate = value.expirayDate || new Date(); // Default to current date
+    customer.isDelete = false;
+    customer.createdAt = new Date();
+    customer.updatedAt = new Date();
 
     const savedCustomer = await customerRepo.save(customer);
 
@@ -97,4 +99,35 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     totalPages: Math.ceil(total / limit),
     totalItems: total,
   });
+};
+
+export const updateCustomer = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { practiceArea } = req.body;
+    const customer = await customerRepo.findOne({ where: { id: +id } });
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    // Create customer instance
+    const updateCustomer = new Customer();
+    customer.practiceArea = practiceArea;
+    customer.updatedAt = new Date();
+
+    const savedCustomer = await customerRepo.save(updateCustomer);
+
+    return res.status(201).json({
+      success: true,
+      data: savedCustomer,
+      message: 'Customer updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating customer:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
 };

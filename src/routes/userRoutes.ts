@@ -5,7 +5,7 @@ import { asyncHandler } from "../middleware/asyncHandler";
 
 const router = Router();
 
-router.get("/",  asyncHandler(getUsers));
-router.post("/", asyncHandler(createUser));
+router.get("/", authorize(["super_admin"]), asyncHandler(getUsers));
+router.post("/", authorize(["super_admin"]), asyncHandler(createUser));
 
 export default router;

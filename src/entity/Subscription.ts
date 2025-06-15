@@ -1,5 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
-import { Customer } from "./Customer"
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
 export class Subscription {
@@ -10,9 +9,47 @@ export class Subscription {
   type!: string;
 
   @Column()
+  name!: string;
+
+  @Column()
+  maxEmployees!: number;
+
+  @Column()
+  maxStorage!: number;
+
+  @Column()
+  storageUnit!: string;
+
+  @Column()
+  isPrivate!: boolean;
+  
+  @Column() 
+  isRecommended!: boolean;
+
+  @Column() 
+  isDelete!: boolean;
+
+  @Column()
   price!: string;
 
-  @ManyToOne(() => Customer, (customer) => customer.subscriptions, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "customerId" })
-  customer!: Customer;
+  @Column()
+  planDuration!: string;
+
+  @Column()
+  currency!: string;
+
+  @Column("simple-array")
+  modules!: string[];
+
+  @Column()
+  additionalInformation!: string;
+
+  @Column()
+  briefBenifitLine!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

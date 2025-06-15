@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 @Entity()
 export class BusinessType {
   @PrimaryGeneratedColumn()
@@ -6,4 +6,13 @@ export class BusinessType {
 
   @Column()
   name!: string;
+
+  @Column()
+  isDelete!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

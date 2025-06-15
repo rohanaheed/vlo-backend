@@ -40,3 +40,19 @@ export const businessEntitySchema = Joi.object({
 export const businessPracticeAreaSchema = Joi.object({
   name: Joi.string().min(2).required()
 });
+
+export const subscriptionSchema = Joi.object({
+  type: Joi.string().required(),
+  name: Joi.string().required(),
+  maxEmployees: Joi.number().integer().min(1).required(),
+  maxStorage: Joi.number().integer().min(1).required(),
+  storageUnit: Joi.string().valid("MB", "GB", "TB").required(),
+  isPrivate: Joi.boolean().required(),
+  isRecommended: Joi.boolean().required(),
+  price: Joi.string().required(),
+  planDuration: Joi.string().required(),
+  currency: Joi.string().required(),
+  modules: Joi.array().items(Joi.string()).required(),
+  additionalInformation: Joi.string().allow(""),
+  briefBenifitLine: Joi.string().required()
+});

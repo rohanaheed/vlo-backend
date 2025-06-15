@@ -3,10 +3,8 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany
+  UpdateDateColumn
 } from "typeorm";
-import { Subscription } from "./Subscription";
 
 export type Status = "Active" | "Trial" | "License Expired" | "Free";
 
@@ -52,14 +50,17 @@ export class Customer {
   @Column()
   password!: string;
 
+  @Column("simple-array")
+  practiceArea!: string[];
+
   @Column({ type: "enum", enum: ["Active" , "Trial" , "License Expired" , "Free"], default: "Free" })
   status!: Status;
 
   @CreateDateColumn()
   expirayDate!: string;
 
-  @OneToMany(() => Subscription, (subscription) => subscription.customer)
-  subscriptions!: Subscription[];
+  @Column()
+  isDelete!: boolean;
 
   @CreateDateColumn()
   createdAt!: Date;

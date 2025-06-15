@@ -16,7 +16,7 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
     return res.status(409).json({ message: "BusinessType already exists" });
   }
 
-  const newType = businessTypeRepo.create({ name });
+  const newType = businessTypeRepo.create({ name, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
   await businessTypeRepo.save(newType);
 
   return res.status(201).json(newType);
@@ -49,6 +49,7 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
   }
 
   type.name = name;
+  type.updatedAt = new Date();
   await businessTypeRepo.save(type);
 
   return res.json(type);
@@ -56,13 +57,18 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
 
 export const deleteBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const result = await businessTypeRepo.delete(Number(id));
 
-  if (result.affected === 0) {
+  const businessType = await businessTypeRepo.findOne({ where: { id: Number(id) } });
+
+  if (!businessType) {
     return res.status(404).json({ message: "BusinessType not found" });
   }
 
-  return res.json({ message: "Deleted successfully" });
+  // Set isDelete to true instead of actually deleting
+  businessType.isDelete = true;
+  await businessTypeRepo.save(businessType);
+
+  return res.json({ message: "BusinessType soft deleted successfully" });
 };
 
 
@@ -75,7 +81,7 @@ export const createBusinessEntity = async (req: Request, res: Response): Promise
     return res.status(409).json({ message: "BusinessEntity already exists" });
   }
 
-  const entity = businessEntityRepo.create({ name });
+  const entity = businessEntityRepo.create({ name, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
   await businessEntityRepo.save(entity);
   return res.status(201).json(entity);
 };
@@ -106,19 +112,25 @@ export const updateBusinessEntity = async (req: Request, res: Response): Promise
   }
 
   entity.name = name;
+  entity.updatedAt = new Date();
   await businessEntityRepo.save(entity);
   return res.json(entity);
 };
 
 export const deleteBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const result = await businessEntityRepo.delete(Number(id));
 
-  if (result.affected === 0) {
+  const businessEntity = await businessEntityRepo.findOne({ where: { id: Number(id) } });
+
+  if (!businessEntity) {
     return res.status(404).json({ message: "BusinessEntity not found" });
   }
 
-  return res.json({ message: "Deleted successfully" });
+  // Set isDelete to true instead of actually deleting
+  businessEntity.isDelete = true;
+  await businessEntityRepo.save(businessEntity);
+
+  return res.json({ message: "BusinessEntity soft deleted successfully" });
 };
 
 
@@ -144,7 +156,7 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
     return res.status(409).json({ message: "Already exists" });
   }
 
-  const area = practiceRepo.create({ name });
+  const area = practiceRepo.create({ name, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
   await practiceRepo.save(area);
   return res.status(201).json(area);
 };
@@ -169,17 +181,26 @@ export const updatePracticeArea = async (req: Request, res: Response): Promise<a
   if (!area) return res.status(404).json({ message: "Not found" });
 
   area.name = name;
+  area.updatedAt = new Date();
   await practiceRepo.save(area);
   return res.json(area);
 };
 
 export const deletePracticeArea = async (req: Request, res: Response): Promise<any> => {
-  const result = await practiceRepo.delete(Number(req.params.id));
-  if (result.affected === 0) {
-    return res.status(404).json({ message: "Not found" });
+  const { id } = req.params;
+
+  const businessarea = await practiceRepo.findOne({ where: { id: Number(id) } });
+
+  if (!businessarea) {
+    return res.status(404).json({ message: "Business practice area not found" });
   }
 
-  return res.json({ message: "Deleted successfully" });
+  // Set isDelete to true instead of actually deleting
+  businessarea.isDelete = true;
+  businessarea.updatedAt = new Date();
+  await businessTypeRepo.save(businessarea);
+
+  return res.json({ message: "Business practice area soft deleted successfully" });
 };
 
 

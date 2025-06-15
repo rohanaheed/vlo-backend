@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
 export type UserRole = "user" | "super_admin";
 
@@ -15,7 +15,16 @@ export class User {
 
   @Column()
   password!: string;
-
+  
   @Column({ type: "enum", enum: ["user", "super_admin"], default: "user" })
   role!: UserRole;
+
+  @Column()
+  isDelete!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

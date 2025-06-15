@@ -18,7 +18,10 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
     name,
     email,
     password: hashedPassword,
-    role: role === "super_admin" ? "super_admin" : "user" // only allow predefined roles
+    role: role === "super_admin" ? "super_admin" : "user", // only allow predefined roles
+    isDelete: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
   });
 
   await userRepo.save(user);
@@ -31,7 +34,10 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      isDelete: user.isDelete,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
     }
   });
 };
@@ -43,10 +49,15 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   const user = await userRepo.findOne({ where: { email } });
   if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
+  // ❌ If user is marked as deleted
+  if (user.isDelete) {
+    return res.status(403).json({ message: "Account has been deactivated" });
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
   const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1h" });
 
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ token, user });
 };
