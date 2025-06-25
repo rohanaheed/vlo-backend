@@ -48,3 +48,23 @@ const savePayment = async (payment: any) => {
   const newPayment = paymentRepo.create(paymentInstance);
   await paymentRepo.save(newPayment);
 };
+
+
+
+export const createPaymentIntent = async (req: Request, res: Response): Promise<any> => {
+  const { amount, currency, customerId } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount * 100, // amount in cents
+      currency: currency || "usd",
+      customer: customerId,
+      payment_method_types: ["card"],
+    });
+
+    return res.status(200).json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to create payment intent" });
+  }
+};
