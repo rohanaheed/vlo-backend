@@ -15,6 +15,12 @@ export class Customer {
   id!: number;
 
   @Column()
+  userId!: number;
+
+  @Column()
+  logo!: string;
+
+  @Column()
   firstName!: string;
 
   @Column()
@@ -42,6 +48,9 @@ export class Customer {
   businessType!: string;
 
   @Column()
+  businessAddress!: string;
+
+  @Column()
   phoneNumber!: string;
 
   @Column()
@@ -58,6 +67,9 @@ export class Customer {
 
   @CreateDateColumn()
   expirayDate!: string;
+
+  @Column()
+  packageId!: number;
 
   @Column()
   isDelete!: boolean;

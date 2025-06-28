@@ -19,6 +19,12 @@ export class User {
   @Column({ type: "enum", enum: ["user", "super_admin"], default: "user" })
   role!: UserRole;
 
+  @Column({ nullable: true, type: "varchar" })
+  otp!: string | null;
+
+  @Column({ nullable: true, type: "datetime" })
+  otpExpiry!: Date | null;
+
   @Column()
   isDelete!: boolean;
 

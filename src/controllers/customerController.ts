@@ -4,13 +4,13 @@ import { Customer } from '../entity/Customer';
 import { customerSchema } from '../utils/validators/inputValidator';
 import { Status } from '../entity/Customer';
 import bcrypt from 'bcryptjs';
-import { Subscription } from "../entity/Subscription";
+import { IsNull, Not } from 'typeorm';
 
 const customerRepo = AppDataSource.getRepository(Customer);
-const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
 export const createCustomer = async (req: Request, res: Response): Promise<any> => {
   try {
+    const userId = (req as any).user.id;
     // Validate request body
     const { error, value } = customerSchema.validate(req.body);
 
@@ -39,6 +39,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.isDelete = false;
     customer.createdAt = new Date();
     customer.updatedAt = new Date();
+    customer.userId = userId;
 
     const savedCustomer = await customerRepo.save(customer);
 
@@ -66,7 +67,7 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
     where: [{ status: "Trial" }, { status: "Free" }, { status: "License Expired" }]
   });
 
-  const totalSubscriptions = await subscriptionRepo.count();
+  const totalSubscriptions = await customerRepo.count({ where: { packageId: Not(IsNull()) } });
 
   return res.json({
     totalCustomers,
@@ -111,11 +112,10 @@ export const updateCustomer = async (req: Request, res: Response): Promise<any> 
     }
 
     // Create customer instance
-    const updateCustomer = new Customer();
     customer.practiceArea = practiceArea;
     customer.updatedAt = new Date();
 
-    const savedCustomer = await customerRepo.save(updateCustomer);
+    const savedCustomer = await customerRepo.save(customer);
 
     return res.status(201).json({
       success: true,

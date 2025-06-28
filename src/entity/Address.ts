@@ -1,32 +1,49 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+
 @Entity()
-export class Payment {
+export class Address {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  paymentMethod!: string;
+  buildingNumber!: string;
 
   @Column()
-  customerId!: string;
+  buildingName!: string;
 
   @Column()
-  name!: string;
+  street!: string;
 
   @Column()
-  amount!: number;
+  town!: string;
 
   @Column()
-  transactionId!: string;
+  city!: string;
 
   @Column()
-  status!: string;
+  state!: string;
 
   @Column()
-  paidAt!: Date;
+  country!: string;
+
+  @Column()
+  district!: string;
+
+  @Column()
+  postalCode!: string;
+
+  @Column()
+  customerId!: number;
+
+  @Column()
+  notes!: string;
 
   @Column()
   isDelete!: boolean;
+
+  @Column()
+  isDefault!: boolean;
 
   @CreateDateColumn()
   createdAt!: Date;

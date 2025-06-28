@@ -2,11 +2,11 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { User } from "../entity/User";
 import { Customer } from "../entity/Customer";
-import { Subscription } from "../entity/Subscription";
 import { BusinessType } from "../entity/BusinessType";
 import { BusinessEntity } from "../entity/BusniessEntity";
 import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
-import { Payment } from "../entity/payment";
+import { Payment } from "../entity/Payment";
+import { Package } from "../entity/Package";
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -20,10 +20,10 @@ export const AppDataSource = new DataSource({
   entities: [
     User,
     Customer,
-    Subscription,
     BusinessEntity,
     BusinessType,
     BusinessPracticeArea,
-    Payment
+    Payment,
+    Package
   ]
 });

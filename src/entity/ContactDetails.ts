@@ -1,29 +1,31 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+
 @Entity()
-export class Payment {
+export class ContactDetails {
   @PrimaryGeneratedColumn()
   id!: number;
-
-  @Column()
-  paymentMethod!: string;
-
-  @Column()
-  customerId!: string;
 
   @Column()
   name!: string;
 
   @Column()
-  amount!: number;
+  workEmail!: string;
 
   @Column()
-  transactionId!: string;
+  homeEmail!: string;
 
   @Column()
-  status!: string;
+  workPhone!: string;
 
   @Column()
-  paidAt!: Date;
+  homePhone!: string;
+
+  @Column()
+  designation!: string;
+
+  @Column()
+  customerId!: number;
 
   @Column()
   isDelete!: boolean;

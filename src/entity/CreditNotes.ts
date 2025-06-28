@@ -1,36 +1,36 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+
 @Entity()
-export class Payment {
+export class CreditNotes {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  paymentMethod!: string;
-
-  @Column()
-  customerId!: string;
-
-  @Column()
-  name!: string;
+  creditNoteNumber!: string;
 
   @Column()
   amount!: number;
 
   @Column()
-  transactionId!: string;
+  customerId!: number;
 
   @Column()
+  invoiceId!: number;
+
+  @Column({
+    type: "enum",
+    enum: ["draft", "sent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid"]
+  })
   status!: string;
 
-  @Column()
-  paidAt!: Date;
+  @UpdateDateColumn()
+  updatedAt!: Date;
 
   @Column()
   isDelete!: boolean;
 
   @CreateDateColumn()
   createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
+  
 }

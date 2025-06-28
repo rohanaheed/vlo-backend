@@ -7,8 +7,8 @@ import userRoutes from "./routes/userRoutes";
 import authRoutes from "./routes/authRoutes";
 import customerRoutes from "./routes/customerRoutes";
 import businessRoutes from "./routes/businessRoutes";
-import subscriptionRoutes from "./routes/subscriptionRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
+import packageRoutes from "./routes/packageRoutes";
 
 const app = express();
 app.use(express.json());
@@ -19,8 +19,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/business", businessRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/stripe", paymentRoutes);
+app.use("/api/packages", packageRoutes);
 
 const PORT = process.env.PORT;
 

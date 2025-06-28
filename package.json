@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/nodemailer": "^6.4.17",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
@@ -20,6 +21,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.1",
+    "nodemailer": "^7.0.3",
     "reflect-metadata": "^0.2.2",
     "stripe": "^18.2.1",
     "typeorm": "^0.3.24"

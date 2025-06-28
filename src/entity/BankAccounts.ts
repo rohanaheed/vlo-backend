@@ -1,29 +1,28 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+
 @Entity()
-export class Payment {
+export class BankAccounts {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  paymentMethod!: string;
+  bankName!: string;
 
   @Column()
-  customerId!: string;
+  accountNumber!: string;
 
   @Column()
-  name!: string;
+  accountName!: string;
 
   @Column()
-  amount!: number;
+  accountType!: string;
 
   @Column()
-  transactionId!: string;
+  bankCode!: string;
 
   @Column()
-  status!: string;
-
-  @Column()
-  paidAt!: Date;
+  customerId!: number;
 
   @Column()
   isDelete!: boolean;
