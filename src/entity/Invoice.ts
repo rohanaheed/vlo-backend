@@ -1,29 +1,41 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 @Entity()
-export class Payment {
+export class Invoice {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  paymentMethod!: string;
+  invoiceNumber!: string;
 
   @Column()
   customerId!: string;
 
   @Column()
-  name!: string;
+  originalInvoiceNumber!: string;
 
   @Column()
-  amount!: number;
+  invoiceDate!: string;
 
   @Column()
-  transactionId!: string;
+  dueDate!: string;
+
+  @Column()
+  amount!: string;
 
   @Column()
   status!: string;
 
   @Column()
-  paidAt!: Date;
+  paymentStatus!: string;
+
+  @Column()
+  paymentMethod!: string;
+
+  @Column()
+  paymentDate!: string;
+
+  @Column()
+  isActive!: boolean;
 
   @Column()
   isDelete!: boolean;

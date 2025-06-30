@@ -4,6 +4,30 @@ import { Package } from "../entity/Package";
 
 const packageRepo = AppDataSource.getRepository(Package);
 
+/**
+ * @openapi
+ * /api/packages:
+ *   post:
+ *     summary: Create a new package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Package'
+ *     responses:
+ *       201:
+ *         description: Package created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *       409:
+ *         description: Package with this name already exists
+ */
 // Create a new package
 export const createPackage = async (req: Request, res: Response): Promise<any> => {
   const {
@@ -55,6 +79,24 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   return res.status(201).json(newPackage);
 };
 
+/**
+ * @openapi
+ * /api/packages:
+ *   get:
+ *     summary: Get all packages (excluding soft deleted ones)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of packages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ */
 // Get all packages (excluding soft deleted ones)
 export const getAllPackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
@@ -64,6 +106,31 @@ export const getAllPackages = async (req: Request, res: Response): Promise<any> 
   return res.json(packages);
 };
 
+/**
+ * @openapi
+ * /api/packages/{id}:
+ *   get:
+ *     summary: Get package by ID
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Package ID
+ *     responses:
+ *       200:
+ *         description: Package found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *       404:
+ *         description: Package not found
+ */
 // Get package by ID
 export const getPackageById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
@@ -78,6 +145,39 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
   return res.json(packageItem);
 };
 
+/**
+ * @openapi
+ * /api/packages/{id}:
+ *   put:
+ *     summary: Update package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Package ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Package'
+ *     responses:
+ *       200:
+ *         description: Package updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *       404:
+ *         description: Package not found
+ *       409:
+ *         description: Package with this name already exists
+ */
 // Update package
 export const updatePackage = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
@@ -141,6 +241,27 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   return res.json(packageItem);
 };
 
+/**
+ * @openapi
+ * /api/packages/{id}:
+ *   delete:
+ *     summary: Soft delete package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Package ID
+ *     responses:
+ *       200:
+ *         description: Package soft deleted successfully
+ *       404:
+ *         description: Package not found
+ */
 // Soft delete package
 export const deletePackage = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
@@ -160,6 +281,24 @@ export const deletePackage = async (req: Request, res: Response): Promise<any> =
   return res.json({ message: "Package soft deleted successfully" });
 };
 
+/**
+ * @openapi
+ * /api/packages/active:
+ *   get:
+ *     summary: Get active packages only
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of active packages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ */
 // Get active packages only
 export const getActivePackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
@@ -169,6 +308,24 @@ export const getActivePackages = async (req: Request, res: Response): Promise<an
   return res.json(packages);
 };
 
+/**
+ * @openapi
+ * /api/packages/default:
+ *   get:
+ *     summary: Get default package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Default package found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *       404:
+ *         description: Default package not found
+ */
 // Get default package
 export const getDefaultPackage = async (req: Request, res: Response): Promise<any> => {
   const packageItem = await packageRepo.findOne({
@@ -182,6 +339,24 @@ export const getDefaultPackage = async (req: Request, res: Response): Promise<an
   return res.json(packageItem);
 };
 
+/**
+ * @openapi
+ * /api/packages/free:
+ *   get:
+ *     summary: Get free packages
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of free packages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ */
 // Get free packages
 export const getFreePackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
@@ -191,6 +366,46 @@ export const getFreePackages = async (req: Request, res: Response): Promise<any>
   return res.json(packages);
 };
 
+/**
+ * @openapi
+ * /api/packages/{id}/auto-renewal:
+ *   patch:
+ *     summary: Enable/Disable auto-renewal for a package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Package ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isAutoRenewal:
+ *                 type: boolean
+ *                 description: Enable or disable auto-renewal
+ *     responses:
+ *       200:
+ *         description: Auto-renewal status updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 package:
+ *                   $ref: '#/components/schemas/Package'
+ *       404:
+ *         description: Package not found
+ */
 // Enable/Disable auto-renewal for a package
 export const toggleAutoRenewal = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;

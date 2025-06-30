@@ -94,3 +94,34 @@ export const resetPasswordSchema = Joi.object({
   otp: Joi.string().length(6).pattern(/^[0-9]+$/).required(),
   newPassword: Joi.string().min(6).required()
 });
+
+export const registrationEmailSchema = Joi.object({
+  loginUrl: Joi.string().uri().optional()
+});
+
+export const paymentSchema = Joi.object({
+  paymentMethod: Joi.string().required(),
+  customerId: Joi.string().required(),
+  name: Joi.string().min(2).max(100).required(),
+  cardNumber: Joi.string().pattern(/^[0-9]{13,19}$/).required(),
+  cardHolderName: Joi.string().min(2).max(100).required(),
+  cardExpiryDate: Joi.string().pattern(/^(0[1-9]|1[0-2])\/([0-9]{2})$/).required(),
+  cardCvv: Joi.string().pattern(/^[0-9]{3,4}$/).required(),
+  zipCode: Joi.string().min(3).max(10).required(),
+  country: Joi.string().min(2).max(50).required(),
+  isDefault: Joi.boolean().optional(),
+  isActive: Joi.boolean().optional()
+});
+
+export const updatePaymentSchema = Joi.object({
+  paymentMethod: Joi.string().optional(),
+  name: Joi.string().min(2).max(100).optional(),
+  cardNumber: Joi.string().pattern(/^[0-9]{13,19}$/).optional(),
+  cardHolderName: Joi.string().min(2).max(100).optional(),
+  cardExpiryDate: Joi.string().pattern(/^(0[1-9]|1[0-2])\/([0-9]{2})$/).optional(),
+  cardCvv: Joi.string().pattern(/^[0-9]{3,4}$/).optional(),
+  zipCode: Joi.string().min(3).max(10).optional(),
+  country: Joi.string().min(2).max(50).optional(),
+  isDefault: Joi.boolean().optional(),
+  isActive: Joi.boolean().optional()
+});

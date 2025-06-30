@@ -5,7 +5,7 @@ import { Customer } from "../entity/Customer";
 import { BusinessType } from "../entity/BusinessType";
 import { BusinessEntity } from "../entity/BusniessEntity";
 import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
-import { Payment } from "../entity/Payment";
+import { PaymentMethod } from "../entity/PaymentMethod";
 import { Package } from "../entity/Package";
 
 export const AppDataSource = new DataSource({
@@ -23,7 +23,7 @@ export const AppDataSource = new DataSource({
     BusinessEntity,
     BusinessType,
     BusinessPracticeArea,
-    Payment,
+    PaymentMethod,
     Package
   ]
 });

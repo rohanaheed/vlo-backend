@@ -7,6 +7,39 @@ import { generateOTP, sendOTPEmail, sendPasswordResetSuccessEmail } from "../uti
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret"; // move to env file in production
 
+/**
+ * @openapi
+ * /api/auth/signup:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *               - role
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [super_admin, user]
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Email already exists
+ */
 export const signup = async (req: Request, res: Response): Promise<any> => {
   const { name, email, password, role } = req.body;
 
@@ -43,6 +76,34 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
   });
 };
 
+/**
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     summary: Login a user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid credentials
+ *       403:
+ *         description: Account has been deactivated
+ */
 export const login = async (req: Request, res: Response): Promise<any> => {
   const { email, password } = req.body;
 
@@ -63,7 +124,31 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   res.json({ token, user });
 };
 
-// Forgot password - Send OTP
+/**
+ * @openapi
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Send OTP for password reset
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *       404:
+ *         description: User not found with this email address
+ *       500:
+ *         description: Failed to send OTP email
+ */
 export const forgotPassword = async (req: Request, res: Response): Promise<any> => {
   const { email } = req.body;
 
@@ -96,7 +181,34 @@ export const forgotPassword = async (req: Request, res: Response): Promise<any> 
   });
 };
 
-// Verify OTP
+/**
+ * @openapi
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP for password reset
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *       400:
+ *         description: Invalid or expired OTP
+ *       404:
+ *         description: User not found
+ */
 export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
   const { email, otp } = req.body;
 
@@ -136,7 +248,37 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
   });
 };
 
-// Reset password
+/**
+ * @openapi
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password using OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired OTP
+ *       404:
+ *         description: User not found
+ */
 export const resetPassword = async (req: Request, res: Response): Promise<any> => {
   const { email, otp, newPassword } = req.body;
 

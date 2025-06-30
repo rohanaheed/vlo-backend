@@ -8,6 +8,31 @@ const businessEntityRepo = AppDataSource.getRepository(BusinessEntity);
 const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
 const businessTypeRepo = AppDataSource.getRepository(BusinessType);
 
+/**
+ * @openapi
+ * /api/business/types:
+ *   post:
+ *     summary: Create a new business type
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Business type created successfully
+ *       409:
+ *         description: BusinessType already exists
+ */
 export const createBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { name } = req.body;
   const existing = await businessTypeRepo.findOneBy({ name });
@@ -22,11 +47,54 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
   return res.status(201).json(newType);
 };
 
+/**
+ * @openapi
+ * /api/business/types:
+ *   get:
+ *     summary: Get all business types
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of business types
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BusinessType'
+ */
 export const getAllBusinessTypes = async (req: Request, res: Response): Promise<any> => {
   const types = await businessTypeRepo.find();
   return res.json(types);
 };
 
+/**
+ * @openapi
+ * /api/business/types/{id}:
+ *   get:
+ *     summary: Get business type by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessType ID
+ *     responses:
+ *       200:
+ *         description: Business type found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessType'
+ *       404:
+ *         description: BusinessType not found
+ */
 export const getBusinessTypeById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   const type = await businessTypeRepo.findOneBy({ id: Number(id) });
@@ -38,6 +106,42 @@ export const getBusinessTypeById = async (req: Request, res: Response): Promise<
   return res.json(type);
 };
 
+/**
+ * @openapi
+ * /api/business/types/{id}:
+ *   put:
+ *     summary: Update business type
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessType ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Business type updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessType'
+ *       404:
+ *         description: BusinessType not found
+ */
 export const updateBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   const { name } = req.body;
@@ -55,6 +159,27 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
   return res.json(type);
 };
 
+/**
+ * @openapi
+ * /api/business/types/{id}:
+ *   delete:
+ *     summary: Soft delete business type
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessType ID
+ *     responses:
+ *       200:
+ *         description: BusinessType soft deleted successfully
+ *       404:
+ *         description: BusinessType not found
+ */
 export const deleteBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
@@ -71,8 +196,31 @@ export const deleteBusinessType = async (req: Request, res: Response): Promise<a
   return res.json({ message: "BusinessType soft deleted successfully" });
 };
 
-
-
+/**
+ * @openapi
+ * /api/business/entities:
+ *   post:
+ *     summary: Create a new business entity
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Business entity created successfully
+ *       409:
+ *         description: BusinessEntity already exists
+ */
 export const createBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { name } = req.body;
 
@@ -86,11 +234,54 @@ export const createBusinessEntity = async (req: Request, res: Response): Promise
   return res.status(201).json(entity);
 };
 
+/**
+ * @openapi
+ * /api/business/entities:
+ *   get:
+ *     summary: Get all business entities
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of business entities
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BusinessEntity'
+ */
 export const getAllBusinessEntities = async (req: Request, res: Response): Promise<any> => {
   const entities = await businessEntityRepo.find();
   return res.json(entities);
 };
 
+/**
+ * @openapi
+ * /api/business/entities/{id}:
+ *   get:
+ *     summary: Get business entity by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessEntity ID
+ *     responses:
+ *       200:
+ *         description: Business entity found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessEntity'
+ *       404:
+ *         description: BusinessEntity not found
+ */
 export const getBusinessEntityById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   const entity = await businessEntityRepo.findOneBy({ id: Number(id) });
@@ -102,6 +293,42 @@ export const getBusinessEntityById = async (req: Request, res: Response): Promis
   return res.json(entity);
 };
 
+/**
+ * @openapi
+ * /api/business/entities/{id}:
+ *   put:
+ *     summary: Update business entity
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessEntity ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Business entity updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessEntity'
+ *       404:
+ *         description: BusinessEntity not found
+ */
 export const updateBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   const { name } = req.body;
@@ -117,6 +344,27 @@ export const updateBusinessEntity = async (req: Request, res: Response): Promise
   return res.json(entity);
 };
 
+/**
+ * @openapi
+ * /api/business/entities/{id}:
+ *   delete:
+ *     summary: Soft delete business entity
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessEntity ID
+ *     responses:
+ *       200:
+ *         description: BusinessEntity soft deleted successfully
+ *       404:
+ *         description: BusinessEntity not found
+ */
 export const deleteBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
@@ -133,9 +381,6 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
   return res.json({ message: "BusinessEntity soft deleted successfully" });
 };
 
-
-
-
 /**
  * Routes for business practice areas
  * 
@@ -144,10 +389,31 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  * 
  *  */
 
-
-
-
-
+/**
+ * @openapi
+ * /api/business/practice-areas:
+ *   post:
+ *     summary: Create a new business practice area
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Business practice area created successfully
+ *       409:
+ *         description: Already exists
+ */
 export const createPracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { name } = req.body;
 
@@ -161,11 +427,54 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
   return res.status(201).json(area);
 };
 
+/**
+ * @openapi
+ * /api/business/practice-areas:
+ *   get:
+ *     summary: Get all business practice areas
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of business practice areas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BusinessPracticeArea'
+ */
 export const getAllPracticeAreas = async (req: Request, res: Response): Promise<any> => {
   const areas = await practiceRepo.find();
   return res.json(areas);
 };
 
+/**
+ * @openapi
+ * /api/business/practice-areas/{id}:
+ *   get:
+ *     summary: Get business practice area by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessPracticeArea ID
+ *     responses:
+ *       200:
+ *         description: Business practice area found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessPracticeArea'
+ *       404:
+ *         description: Not found
+ */
 export const getPracticeAreaById = async (req: Request, res: Response): Promise<any> => {
   const area = await practiceRepo.findOneBy({ id: Number(req.params.id) });
   if (!area) return res.status(404).json({ message: "Not found" });
@@ -173,6 +482,42 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
   return res.json(area);
 };
 
+/**
+ * @openapi
+ * /api/business/practice-areas/{id}:
+ *   put:
+ *     summary: Update business practice area
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessPracticeArea ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Business practice area updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BusinessPracticeArea'
+ *       404:
+ *         description: Not found
+ */
 export const updatePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   const { name } = req.body;
@@ -186,6 +531,27 @@ export const updatePracticeArea = async (req: Request, res: Response): Promise<a
   return res.json(area);
 };
 
+/**
+ * @openapi
+ * /api/business/practice-areas/{id}:
+ *   delete:
+ *     summary: Soft delete business practice area
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: BusinessPracticeArea ID
+ *     responses:
+ *       200:
+ *         description: Business practice area soft deleted successfully
+ *       404:
+ *         description: Business practice area not found
+ */
 export const deletePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 

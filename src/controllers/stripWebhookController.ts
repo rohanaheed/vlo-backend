@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { stripe } from "../config/stripe";
 import { AppDataSource } from "../config/db";
-import { Payment } from "../entity/payment";
+import { PaymentMethod } from "../entity/PaymentMethod";
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || "whsec_...";
 
@@ -36,17 +36,17 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
 
 
 const savePayment = async (payment: any) => {
-  const paymentRepo = AppDataSource.getRepository(Payment);
-  const paymentInstance = paymentRepo.create({
-    paymentMethod: payment.payment_method_types[0],
-    customerId: payment.customer as string,
-    name: payment.metadata?.name || "N/A",
-    amount: payment.amount_received / 100, // Convert from cents
+  const paymentRepo = AppDataSource.getRepository(PaymentMethod);
+  const paymentMethodData = {
+    paymentMethod: payment.payment_method_types?.[0] || "unknown",
+    customerId: String(payment.customer),
+    name: payment.metadata?.name ?? "N/A",
+    amount: payment.amount_received ? payment.amount_received / 100 : 0, // Convert from cents, default to 0
     transactionId: payment.id,
     isDelete: false,
-  });
-  const newPayment = paymentRepo.create(paymentInstance);
-  await paymentRepo.save(newPayment);
+  };
+  const newPaymentMethod = paymentRepo.create(paymentMethodData);
+  await paymentRepo.save(newPaymentMethod);
 };
 
 
