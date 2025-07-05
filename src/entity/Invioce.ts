@@ -28,9 +28,15 @@ export class Invoice {
   customerId!: number;
 
   @Column()
-  createdAt!: Date;
+  currencyId!: number;
 
   @Column()
+  orderId!: number;
+  
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
   updatedAt!: Date;
 
   @Column()

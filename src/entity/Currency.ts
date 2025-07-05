@@ -2,30 +2,30 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 
 
 @Entity()
-export class CreditNotes {
+export class Currency {
   @PrimaryGeneratedColumn()
   id!: number;
-
-  @Column()
-  creditNoteNumber!: string;
-
-  @Column()
-  amount!: number;
 
   @Column()
   customerId!: number;
 
   @Column()
-  invoiceId!: number;
+  currencyCode!: string;
 
   @Column()
-  currencyId!: number;
+  currencyName!: string;
 
-  @Column({
-    type: "enum",
-    enum: ["draft", "sent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid"]
-  })
-  status!: string;
+  @Column()
+  currencySymbol!: string;
+
+  @Column()
+  exchangeRate!: number;
+
+  @Column()
+  isCrypto!: boolean;
+
+  @Column()
+  USDPrice!: number;
 
   @UpdateDateColumn()
   updatedAt!: Date;
@@ -35,5 +35,5 @@ export class CreditNotes {
 
   @CreateDateColumn()
   createdAt!: Date;
-  
+
 }

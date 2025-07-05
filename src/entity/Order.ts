@@ -1,41 +1,53 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+
 @Entity()
-export class Invoice {
+export class Order {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  invoiceNumber!: string;
+  customerId!: number;
 
   @Column()
-  customerId!: string;
+  orderNumber!: number;
 
   @Column()
-  originalInvoiceNumber!: string;
+  originalOrderNumber!: string;
 
   @Column()
-  invoiceDate!: string;
+  orderDate!: string;
 
   @Column()
-  dueDate!: string;
+  subTotal!: number;
 
   @Column()
-  amount!: string;
+  discount!: number;
+
+  @Column()
+  discountType!: number;
+
+  @Column()
+  total!: number;
 
   @Column()
   status!: string;
 
   @Column()
-  paymentStatus!: string;
+  currencyId!: number;
 
   @Column()
-  paymentMethod!: string;
+  note!: string;
 
   @Column()
-  paymentDate!: string;
+  addedBy!: number;
 
   @Column()
-  isActive!: boolean;
+  customOrderNumber!: string;
+
+  @Column()
+  @UpdateDateColumn()
+  updatedAt!: Date;
 
   @Column()
   isDelete!: boolean;
@@ -43,6 +55,4 @@ export class Invoice {
   @CreateDateColumn()
   createdAt!: Date;
 
-  @UpdateDateColumn()
-  updatedAt!: Date;
 }

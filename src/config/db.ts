@@ -7,6 +7,10 @@ import { BusinessEntity } from "../entity/BusniessEntity";
 import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
 import { PaymentMethod } from "../entity/PaymentMethod";
 import { Package } from "../entity/Package";
+import { Order } from "../entity/Order";
+import { Currency } from "../entity/Currency";
+import { Invoice } from "../entity/Invioce";
+import { CreditNotes } from "../entity/CreditNotes";
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -24,6 +28,10 @@ export const AppDataSource = new DataSource({
     BusinessType,
     BusinessPracticeArea,
     PaymentMethod,
-    Package
+    Package,
+    Currency,
+    Order,
+    Invoice,
+    CreditNotes
   ]
 });

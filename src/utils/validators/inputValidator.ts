@@ -125,3 +125,33 @@ export const updatePaymentSchema = Joi.object({
   isDefault: Joi.boolean().optional(),
   isActive: Joi.boolean().optional()
 });
+
+export const invoiceSchema = Joi.object({
+  invoiceNumber: Joi.string().min(3).max(50).required(),
+  amount: Joi.number().positive().precision(2).required(),
+  status: Joi.string().valid(
+    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
+    'partialyPaid', 'disputed', 'reminder', 'resend', 
+    'void', 'viewed', 'unpaid'
+  ).default('draft'),
+  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded').default('pending'),
+  plan: Joi.string().min(2).max(100).required(),
+  customerId: Joi.number().integer().positive().required(),
+  currencyId: Joi.number().integer().positive().required(),
+  orderId: Joi.number().integer().positive().required()
+});
+
+export const updateInvoiceSchema = Joi.object({
+  invoiceNumber: Joi.string().min(3).max(50).optional(),
+  amount: Joi.number().positive().precision(2).optional(),
+  status: Joi.string().valid(
+    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
+    'partialyPaid', 'disputed', 'reminder', 'resend', 
+    'void', 'viewed', 'unpaid'
+  ).optional(),
+  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded').optional(),
+  plan: Joi.string().min(2).max(100).optional(),
+  customerId: Joi.number().integer().positive().optional(),
+  currencyId: Joi.number().integer().positive().optional(),
+  orderId: Joi.number().integer().positive().optional()
+});

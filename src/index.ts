@@ -9,6 +9,7 @@ import customerRoutes from "./routes/customerRoutes";
 import businessRoutes from "./routes/businessRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
 import packageRoutes from "./routes/packageRoutes";
+import invoiceRoutes from "./routes/invoiceRoutes";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import cors from "cors";
@@ -17,8 +18,9 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["*"],
-    methods: ["*"]
+    origin: "http://localhost:3000",
+    methods: ["*"],
+    credentials: true,
   })
 );
 
@@ -96,6 +98,29 @@ const swaggerOptions = {
             expirayDate: { type: 'string', format: 'date-time' },
           },
         },
+        Invoice: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            invoiceNumber: { type: 'string' },
+            amount: { type: 'number' },
+            status: { 
+              type: 'string',
+              enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'partialyPaid', 'disputed', 'reminder', 'resend', 'void', 'viewed', 'unpaid']
+            },
+            paymentStatus: { 
+              type: 'string',
+              enum: ['pending', 'paid', 'failed', 'refunded']
+            },
+            plan: { type: 'string' },
+            customerId: { type: 'integer' },
+            currencyId: { type: 'integer' },
+            orderId: { type: 'integer' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
     security: [{ bearerAuth: [] }],
@@ -116,6 +141,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/stripe", paymentRoutes);
 app.use("/api/packages", packageRoutes);
+app.use("/api/invoices", invoiceRoutes);
 
 const PORT = process.env.PORT;
 
