@@ -10,6 +10,8 @@ import businessRoutes from "./routes/businessRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
 import packageRoutes from "./routes/packageRoutes";
 import invoiceRoutes from "./routes/invoiceRoutes";
+import creditNotesRoutes from "./routes/creditNotesRoutes";
+import noteRoutes from "./routes/noteRoutes";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import cors from "cors";
@@ -121,6 +123,56 @@ const swaggerOptions = {
             updatedAt: { type: 'string', format: 'date-time' },
           },
         },
+        CreditNote: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            creditNoteNumber: { type: 'string' },
+            amount: { type: 'number' },
+            customerId: { type: 'integer' },
+            invoiceId: { type: 'integer' },
+            currencyId: { type: 'integer' },
+            status: { 
+              type: 'string',
+              enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'partialyPaid', 'disputed', 'reminder', 'resend', 'void', 'viewed', 'unpaid']
+            },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        Note: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            title: { type: 'string' },
+            content: { type: 'string' },
+            customerId: { type: 'integer' },
+            type: { type: 'string' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        NoteInput: {
+          type: 'object',
+          required: ['title', 'content', 'customerId', 'type'],
+          properties: {
+            title: { type: 'string', minLength: 1, maxLength: 255 },
+            content: { type: 'string', minLength: 1 },
+            customerId: { type: 'integer', minimum: 1 },
+            type: { type: 'string', minLength: 1, maxLength: 100 },
+          },
+        },
+        NoteUpdateInput: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', minLength: 1, maxLength: 255 },
+            content: { type: 'string', minLength: 1 },
+            customerId: { type: 'integer', minimum: 1 },
+            type: { type: 'string', minLength: 1, maxLength: 100 },
+          },
+        },
       },
     },
     security: [{ bearerAuth: [] }],
@@ -142,6 +194,8 @@ app.use("/api/business", businessRoutes);
 app.use("/api/stripe", paymentRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/credit-notes", creditNotesRoutes);
+app.use("/api/notes", noteRoutes);
 
 const PORT = process.env.PORT;
 

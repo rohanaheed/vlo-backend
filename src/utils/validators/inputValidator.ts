@@ -155,3 +155,43 @@ export const updateInvoiceSchema = Joi.object({
   currencyId: Joi.number().integer().positive().optional(),
   orderId: Joi.number().integer().positive().optional()
 });
+
+export const creditNoteSchema = Joi.object({
+  creditNoteNumber: Joi.string().min(3).max(50).required(),
+  amount: Joi.number().positive().precision(2).required(),
+  customerId: Joi.number().integer().positive().required(),
+  invoiceId: Joi.number().integer().positive().required(),
+  currencyId: Joi.number().integer().positive().required(),
+  status: Joi.string().valid(
+    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
+    'partialyPaid', 'disputed', 'reminder', 'resend', 
+    'void', 'viewed', 'unpaid'
+  ).default('draft')
+});
+
+export const updateCreditNoteSchema = Joi.object({
+  creditNoteNumber: Joi.string().min(3).max(50).optional(),
+  amount: Joi.number().positive().precision(2).optional(),
+  customerId: Joi.number().integer().positive().optional(),
+  invoiceId: Joi.number().integer().positive().optional(),
+  currencyId: Joi.number().integer().positive().optional(),
+  status: Joi.string().valid(
+    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
+    'partialyPaid', 'disputed', 'reminder', 'resend', 
+    'void', 'viewed', 'unpaid'
+  ).optional()
+});
+
+export const noteSchema = Joi.object({
+  title: Joi.string().min(1).max(255).required(),
+  content: Joi.string().min(1).required(),
+  customerId: Joi.number().integer().positive().required(),
+  type: Joi.string().min(1).max(100).required()
+});
+
+export const updateNoteSchema = Joi.object({
+  title: Joi.string().min(1).max(255).optional(),
+  content: Joi.string().min(1).optional(),
+  customerId: Joi.number().integer().positive().optional(),
+  type: Joi.string().min(1).max(100).optional()
+});
