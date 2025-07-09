@@ -4,10 +4,10 @@ export class BusinessType {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   name!: string;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

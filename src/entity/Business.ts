@@ -6,52 +6,52 @@ export class Business {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   businessName!: string;
 
-  @Column()
+  @Column({ default: "" })
   tradingName!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessAddress!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessType!: string;
 
-  @Column()
+  @Column({ default: 0 })
   businessSize!: number;
 
-  @Column()
+  @Column({ default: "" })
   businessEntity!: string;
 
-  @Column()
+  @Column({ default: "active" })
   status!: string;
 
-  @Column()
+  @Column({ default: "" })
   domainType!: string;
 
-  @Column()
+  @Column({ default: "" })
   website!: string;
 
-  @Column()
+  @Column({ default: "" })
   subdomain!: string;
 
-  @Column()
+  @Column({ default: "" })
   currency!: string;
 
-  @Column()
+  @Column({ default: "en" })
   language!: string;
 
-  @Column()
+  @Column({ default: "UTC" })
   timezone!: string;
 
-  @Column()
+  @Column({ default: "free" })
   subscriptionType!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessStatistics!: string;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

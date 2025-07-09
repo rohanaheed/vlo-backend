@@ -6,50 +6,50 @@ export class Order {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: 0 })
   orderNumber!: number;
 
-  @Column()
+  @Column({ default: "" })
   originalOrderNumber!: string;
 
-  @Column()
+  @Column({ default: "" })
   orderDate!: string;
 
-  @Column()
+  @Column({ default: 0 })
   subTotal!: number;
 
-  @Column()
+  @Column({ default: 0 })
   discount!: number;
 
-  @Column()
+  @Column({ default: 0 })
   discountType!: number;
 
-  @Column()
+  @Column({ default: 0 })
   total!: number;
 
-  @Column()
+  @Column({ default: "pending" })
   status!: string;
 
-  @Column()
+  @Column({ default: 0 })
   currencyId!: number;
 
-  @Column()
+  @Column({ default: "" })
   note!: string;
 
-  @Column()
+  @Column({ default: 0 })
   addedBy!: number;
 
-  @Column()
+  @Column({ default: "" })
   customOrderNumber!: string;
 
   @Column()
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

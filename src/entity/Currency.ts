@@ -6,31 +6,31 @@ export class Currency {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: "" })
   currencyCode!: string;
 
-  @Column()
+  @Column({ default: "" })
   currencyName!: string;
 
-  @Column()
+  @Column({ default: "" })
   currencySymbol!: string;
 
-  @Column()
+  @Column({ default: 1 })
   exchangeRate!: number;
 
-  @Column()
+  @Column({ default: false })
   isCrypto!: boolean;
 
-  @Column()
+  @Column({ default: 0 })
   USDPrice!: number;
 
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

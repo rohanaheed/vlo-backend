@@ -6,25 +6,25 @@ export class BankAccounts {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   bankName!: string;
 
-  @Column()
+  @Column({ default: "" })
   accountNumber!: string;
 
-  @Column()
+  @Column({ default: "" })
   accountName!: string;
 
-  @Column()
+  @Column({ default: "" })
   accountType!: string;
 
-  @Column()
+  @Column({ default: "" })
   bankCode!: string;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

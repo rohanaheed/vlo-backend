@@ -14,64 +14,64 @@ export class Customer {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: 0 })
   userId!: number;
 
-  @Column()
+  @Column({ default: "" })
   logo!: string;
 
-  @Column()
+  @Column({ default: "" })
   firstName!: string;
 
-  @Column()
+  @Column({ default: "" })
   lastName!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessName!: string;
 
-  @Column()
+  @Column({ default: "" })
   tradingName!: string;
 
-  @Column()
+  @Column({ default: "" })
   subscription!: string;
 
-  @Column()
+  @Column({ default: "" })
   note!: string;
 
-  @Column()
+  @Column({ default: 0 })
   businessSize!: number;
 
-  @Column()
+  @Column({ default: "" })
   businessEntity!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessType!: string;
 
-  @Column()
+  @Column({ default: "" })
   businessAddress!: string;
 
-  @Column()
+  @Column({ default: "" })
   phoneNumber!: string;
 
-  @Column()
+  @Column({ default: "" })
   email!: string;
 
-  @Column()
+  @Column({ default: "" })
   password!: string;
 
-  @Column("simple-array")
+  @Column("simple-array", { default: "" })
   practiceArea!: string[];
 
-  @Column({ type: "enum", enum: ["Active" , "Trial" , "License Expired" , "Free"], default: "Free" })
+  @Column({ type: "enum", enum: ["Active", "Trial", "License Expired", "Free"], default: "Free" })
   status!: Status;
 
   @CreateDateColumn()
   expirayDate!: string;
 
-  @Column()
+  @Column({ default: 0 })
   packageId!: number;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

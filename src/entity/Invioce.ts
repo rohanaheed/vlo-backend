@@ -6,32 +6,69 @@ export class Invoice {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   invoiceNumber!: string;
 
-  @Column()
+  @Column({ default: 0 })
   amount!: number;
 
   @Column({
     type: "enum",
-    enum: ["draft", "sent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid"]
+    enum: ["draft", "sent", "unsent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid"],
+    default: "draft"
   })
   status!: string;
 
-  @Column()
+  @Column({ default: "unpaid" })
   paymentStatus!: string;
 
-  @Column()
+  @Column({ default: "" })
   plan!: string;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: 0 })
   currencyId!: number;
 
-  @Column()
+  @Column({ default: 0 })
   orderId!: number;
+
+  @Column({ default: "" })
+  dueDate!: Date;
+
+  @Column({ default: "" })
+  referenceNumber!: string;
+
+  @Column({ default: "" })
+  priority!: string;
+
+  @Column({ default: "" })
+  discount!: number;
+
+  @Column({ default: "" })
+  vat!: number;
+
+  @Column({ default: "" })
+  discountType!: string;
+
+  @Column({ default: "" })
+  subTotal!: number;
+
+  @Column({ default: "" })
+  outstandingBalance!: number;
+
+  @Column({ default: "" })
+  recurring!: string;
+
+  @Column({ default: "" })
+  recurringInterval!: string;
+
+  @Column({ default: "" })
+  recurringCount!: number;
+
+  @Column({ default: "" })
+  invoiceFile!: string;
   
   @CreateDateColumn()
   createdAt!: Date;
@@ -39,7 +76,7 @@ export class Invoice {
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
   
 }

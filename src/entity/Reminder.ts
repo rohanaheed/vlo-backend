@@ -1,8 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
-
 @Entity()
-export class Note {
+export class Reminder {
   @PrimaryGeneratedColumn()
   id!: number;
 
@@ -14,13 +13,15 @@ export class Note {
 
   @Column({ default: 0 })
   customerId!: number;
-  
-  @Column({ default: "" })
+
+  @Column({ type: "datetime", nullable: true })
+  dueDate!: Date | null;
+
+  @Column({ default: "pending" })
+  status!: string;
+
+  @Column({ default: "email" })
   type!: string;
-
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
 
   @Column({ default: false })
   isDelete!: boolean;
@@ -28,4 +29,6 @@ export class Note {
   @CreateDateColumn()
   createdAt!: Date;
 
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

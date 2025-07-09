@@ -4,55 +4,55 @@ export class Package {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   name!: string;
 
-  @Column()
+  @Column({ default: "" })
   description!: string;
 
-  @Column()
+  @Column({ default: 0 })
   monthlyPrice!: number;
 
-  @Column()
+  @Column({ default: 0 })
   annualPrice!: number;
 
-  @Column()
+  @Column({ default: 1 })
   billingCycle!: number;
 
-  @Column()
+  @Column({ default: 1 })
   duration!: number;
 
-  @Column()
+  @Column({ default: 0 })
   maxEmployees!: number;
 
-  @Column()
+  @Column({ default: 0 })
   maxClients!: number;
 
-  @Column()
+  @Column({ default: false })
   isFree!: boolean;
 
-  @Column()
+  @Column({ default: false })
   isPrivate!: boolean;
 
-  @Column()
+  @Column({ default: false })
   isAutoRenewal!: boolean;
 
-  @Column()
+  @Column({ default: true })
   isActive!: boolean;
 
-  @Column()
+  @Column({ default: "active" })
   monthlyStatus!: string;
 
-  @Column()
+  @Column({ default: "active" })
   annualStatus!: string;
 
-  @Column()
+  @Column({ default: "" })
   moduleInPackage!: string;
 
-  @Column()
+  @Column({ default: false })
   isDefault!: boolean;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

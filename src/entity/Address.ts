@@ -6,43 +6,43 @@ export class Address {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   buildingNumber!: string;
 
-  @Column()
+  @Column({ default: "" })
   buildingName!: string;
 
-  @Column()
+  @Column({ default: "" })
   street!: string;
 
-  @Column()
+  @Column({ default: "" })
   town!: string;
 
-  @Column()
+  @Column({ default: "" })
   city!: string;
 
-  @Column()
+  @Column({ default: "" })
   state!: string;
 
-  @Column()
+  @Column({ default: "" })
   country!: string;
 
-  @Column()
+  @Column({ default: "" })
   district!: string;
 
-  @Column()
+  @Column({ default: "" })
   postalCode!: string;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: "" })
   notes!: string;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
-  @Column()
+  @Column({ default: false })
   isDefault!: boolean;
 
   @CreateDateColumn()

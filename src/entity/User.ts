@@ -7,25 +7,25 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   name!: string;
 
-  @Column()
+  @Column({ default: "" })
   email!: string;
 
-  @Column()
+  @Column({ default: "" })
   password!: string;
   
   @Column({ type: "enum", enum: ["user", "super_admin"], default: "user" })
   role!: UserRole;
 
-  @Column({ nullable: true, type: "varchar" })
+  @Column({ nullable: true, type: "varchar", default: null })
   otp!: string | null;
 
-  @Column({ nullable: true, type: "datetime" })
+  @Column({ nullable: true, type: "datetime", default: null })
   otpExpiry!: Date | null;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

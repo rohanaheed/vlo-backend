@@ -6,28 +6,28 @@ export class ContactDetails {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   name!: string;
 
-  @Column()
+  @Column({ default: "" })
   workEmail!: string;
 
-  @Column()
+  @Column({ default: "" })
   homeEmail!: string;
 
-  @Column()
+  @Column({ default: "" })
   workPhone!: string;
 
-  @Column()
+  @Column({ default: "" })
   homePhone!: string;
 
-  @Column()
+  @Column({ default: "" })
   designation!: string;
 
-  @Column()
+  @Column({ default: 0 })
   customerId!: number;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()

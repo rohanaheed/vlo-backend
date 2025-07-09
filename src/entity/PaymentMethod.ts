@@ -4,40 +4,40 @@ export class PaymentMethod {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: "" })
   paymentMethod!: string;
 
-  @Column()
+  @Column({ default: "" })
   customerId!: string;
 
-  @Column()
+  @Column({ default: "" })
   name!: string;
 
-  @Column()
+  @Column({ default: "" })
   cardNumber!: string;
 
-  @Column()
+  @Column({ default: "" })
   cardHolderName!: string;
 
-  @Column()
+  @Column({ default: "" })
   cardExpiryDate!: string;
 
-  @Column()
+  @Column({ default: "" })
   cardCvv!: string;
 
-  @Column()
+  @Column({ default: "" })
   zipCode!: string;
 
-  @Column()
+  @Column({ default: "" })
   country!: string;
 
-  @Column()
+  @Column({ default: false })
   isDefault!: boolean;
 
-  @Column()
+  @Column({ default: true })
   isActive!: boolean;
 
-  @Column()
+  @Column({ default: false })
   isDelete!: boolean;
 
   @CreateDateColumn()
