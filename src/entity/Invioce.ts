@@ -14,7 +14,7 @@ export class Invoice {
 
   @Column({
     type: "enum",
-    enum: ["draft", "sent", "unsent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid"],
+    enum: ["draft", "sent", "unsent", "paid", "overdue", "cancelled", "partialyPaid", "disputed", "reminder", "resend", "void", "viewed", "unpaid", "bad"],
     default: "draft"
   })
   status!: string;
@@ -36,6 +36,9 @@ export class Invoice {
 
   @Column({ default: "" })
   dueDate!: Date;
+
+  @Column({ default: "" })
+  markedBadOn!: Date;
 
   @Column({ default: "" })
   referenceNumber!: string;

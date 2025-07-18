@@ -5,7 +5,8 @@ import { Customer } from '../entity/Customer';
 import { Currency } from '../entity/Currency';
 import { Order } from '../entity/Order';
 import { invoiceSchema, updateInvoiceSchema } from '../utils/validators/inputValidator';
-import { IsNull, Not, Between } from 'typeorm';
+import { Between } from 'typeorm';
+import { uploadFileToS3, removeFileFromS3 } from '../utils/s3Utils';
 
 const invoiceRepo = AppDataSource.getRepository(Invoice);
 const customerRepo = AppDataSource.getRepository(Customer);
@@ -48,7 +49,6 @@ const orderRepo = AppDataSource.getRepository(Order);
  *               paymentStatus:
  *                 type: string
  *                 enum: [pending, paid, failed, refunded]
- *                 default: pending
  *               plan:
  *                 type: string
  *                 minLength: 2
@@ -86,6 +86,8 @@ const orderRepo = AppDataSource.getRepository(Order);
 export const createInvoice = async (req: Request, res: Response): Promise<any> => {
   try {
     const userId = (req as any).user.id;
+    // Extend req type to include file property
+    const reqWithFile = req as Request & { file?: { buffer: Buffer, originalname: string, mimetype: string } };
 
     // Validate request body
     const { error, value } = invoiceSchema.validate(req.body);
@@ -135,17 +137,40 @@ export const createInvoice = async (req: Request, res: Response): Promise<any> =
       });
     }
 
-    // Create invoice instance
+    // Create invoice instance according to Invoice entity
     const invoice = new Invoice();
     invoice.invoiceNumber = value.invoiceNumber;
     invoice.amount = value.amount;
-    invoice.status = value.status;
-    invoice.paymentStatus = value.paymentStatus;
-    invoice.plan = value.plan;
+    invoice.status = value.status || "draft";
+    invoice.paymentStatus = value.paymentStatus || "unpaid";
+    invoice.plan = value.plan || "";
     invoice.customerId = value.customerId;
     invoice.currencyId = value.currencyId;
     invoice.orderId = value.orderId;
+    invoice.dueDate = value.dueDate || "";
+    invoice.referenceNumber = value.referenceNumber || "";
+    invoice.priority = value.priority || "";
+    invoice.discount = value.discount || "";
+    invoice.vat = value.vat || "";
+    invoice.discountType = value.discountType || "";
+    invoice.subTotal = value.subTotal || "";
+    invoice.outstandingBalance = value.outstandingBalance || "";
+    invoice.recurring = value.recurring || "";
+    invoice.recurringInterval = value.recurringInterval || "";
+    invoice.recurringCount = value.recurringCount || "";
     invoice.isDelete = false;
+
+    // Handle invoice file upload to S3 if file is present
+    if (reqWithFile.file && reqWithFile.file.buffer && reqWithFile.file.originalname && reqWithFile.file.mimetype) {
+      const s3Url = await uploadFileToS3({
+        buffer: reqWithFile.file.buffer,
+        originalname: reqWithFile.file.originalname,
+        mimetype: reqWithFile.file.mimetype
+      });
+      invoice.invoiceFile = s3Url;
+    } else {
+      invoice.invoiceFile = "";
+    }
 
     const savedInvoice = await invoiceRepo.save(invoice);
 
@@ -433,29 +458,26 @@ export const getInvoiceById = async (req: Request, res: Response): Promise<any> 
 export const updateInvoice = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-
+    // Extend req type to include file property
+    const reqWithFile = req as Request & { file?: { buffer: Buffer, originalname: string, mimetype: string } };
     // Validate request body
     const { error, value } = updateInvoiceSchema.validate(req.body);
-
     if (error) {
       return res.status(400).json({
         success: false,
         message: error.details[0].message
       });
     }
-
     // Check if invoice exists
     const existingInvoice = await invoiceRepo.findOne({
       where: { id: parseInt(id), isDelete: false }
     });
-
     if (!existingInvoice) {
       return res.status(404).json({
         success: false,
         message: 'Invoice not found'
       });
     }
-
     // Check if new invoice number already exists (if being updated)
     if (value.invoiceNumber && value.invoiceNumber !== existingInvoice.invoiceNumber) {
       const duplicateInvoice = await invoiceRepo.findOne({
@@ -468,7 +490,6 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
         });
       }
     }
-
     // Validate related entities if being updated
     if (value.customerId) {
       const customer = await customerRepo.findOne({ where: { id: value.customerId, isDelete: false } });
@@ -479,7 +500,6 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
         });
       }
     }
-
     if (value.currencyId) {
       const currency = await currencyRepo.findOne({ where: { id: value.currencyId } });
       if (!currency) {
@@ -489,7 +509,6 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
         });
       }
     }
-
     if (value.orderId) {
       const order = await orderRepo.findOne({ where: { id: value.orderId } });
       if (!order) {
@@ -499,19 +518,34 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
         });
       }
     }
-
+    // Handle invoice file replacement in S3 if new file is present
+    if (reqWithFile.file && reqWithFile.file.buffer && reqWithFile.file.originalname && reqWithFile.file.mimetype) {
+      // If there is an existing file, remove it from S3
+      if (existingInvoice.invoiceFile) {
+        // Extract S3 key from URL
+        const urlParts = existingInvoice.invoiceFile.split('.amazonaws.com/');
+        if (urlParts.length === 2) {
+          const s3Key = urlParts[1];
+          await removeFileFromS3(s3Key);
+        }
+      }
+      // Upload new file
+      const s3Url = await uploadFileToS3({
+        buffer: reqWithFile.file.buffer,
+        originalname: reqWithFile.file.originalname,
+        mimetype: reqWithFile.file.mimetype
+      });
+      value.invoiceFile = s3Url;
+    }
     // Update invoice
     Object.assign(existingInvoice, value);
     existingInvoice.updatedAt = new Date();
-
     const updatedInvoice = await invoiceRepo.save(existingInvoice);
-
     return res.json({
       success: true,
       data: updatedInvoice,
       message: 'Invoice updated successfully'
     });
-
   } catch (error) {
     console.error('Error updating invoice:', error);
     return res.status(500).json({
@@ -556,29 +590,31 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
 export const deleteInvoice = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-
     const invoice = await invoiceRepo.findOne({
       where: { id: parseInt(id), isDelete: false }
     });
-
     if (!invoice) {
       return res.status(404).json({
         success: false,
         message: 'Invoice not found'
       });
     }
-
+    // Delete invoice file from S3 if exists
+    if (invoice.invoiceFile) {
+      const urlParts = invoice.invoiceFile.split('.amazonaws.com/');
+      if (urlParts.length === 2) {
+        const s3Key = urlParts[1];
+        await removeFileFromS3(s3Key);
+      }
+    }
     // Soft delete
     invoice.isDelete = true;
     invoice.updatedAt = new Date();
-
     await invoiceRepo.save(invoice);
-
     return res.json({
       success: true,
       message: 'Invoice deleted successfully'
     });
-
   } catch (error) {
     console.error('Error deleting invoice:', error);
     return res.status(500).json({
@@ -596,6 +632,21 @@ export const deleteInvoice = async (req: Request, res: Response): Promise<any> =
  *     tags: [Invoices]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *                 description: Start date for filtering (inclusive, optional)
+ *               endDate:
+ *                 type: string
+ *                 format: date
+ *                 description: End date for filtering (inclusive, optional)
  *     responses:
  *       200:
  *         description: Invoice statistics
@@ -613,45 +664,90 @@ export const deleteInvoice = async (req: Request, res: Response): Promise<any> =
  *                       type: integer
  *                     totalAmount:
  *                       type: number
- *                     paidInvoices:
+ *                     totalOutstanding:
+ *                       type: number
+ *                     unsent:
  *                       type: integer
- *                     unpaidInvoices:
+ *                     draft:
  *                       type: integer
- *                     overdueInvoices:
+ *                     sent:
  *                       type: integer
- *                     draftInvoices:
+ *                     partial:
  *                       type: integer
- *                     cancelledInvoices:
+ *                     overdue:
+ *                       type: integer
+ *                     paid:
  *                       type: integer
  *       500:
  *         description: Internal server error
  */
 export const getInvoiceStats = async (req: Request, res: Response): Promise<any> => {
   try {
-    const totalInvoices = await invoiceRepo.count({ where: { isDelete: false } });
-    const paidInvoices = await invoiceRepo.count({ where: { status: 'paid', isDelete: false } });
-    const unpaidInvoices = await invoiceRepo.count({ where: { status: 'unpaid', isDelete: false } });
-    const overdueInvoices = await invoiceRepo.count({ where: { status: 'overdue', isDelete: false } });
-    const draftInvoices = await invoiceRepo.count({ where: { status: 'draft', isDelete: false } });
-    const cancelledInvoices = await invoiceRepo.count({ where: { status: 'cancelled', isDelete: false } });
+    // Get date filter from request body, fallback to current month
+    let { startDate, endDate } = req.body || {};
+    let filterStart: Date, filterEnd: Date;
+    if (startDate && endDate) {
+      filterStart = new Date(startDate);
+      filterEnd = new Date(endDate);
+      // Set end time to end of day
+      filterEnd.setHours(23, 59, 59, 999);
+    } else {
+      const now = new Date();
+      filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      filterEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    }
 
-    // Calculate total amount
-    const invoices = await invoiceRepo.find({ where: { isDelete: false } });
+    // Common filter for date range and not deleted
+    const dateFilter = {
+      isDelete: false,
+      createdAt: Between(filterStart, filterEnd)
+    };
+
+    // Status counts
+    const [
+      totalInvoices,
+      draftInvoices,
+      sentInvoices,
+      partialInvoices,
+      overdueInvoices,
+      paidInvoices,
+      unsentInvoices
+    ] = await Promise.all([
+      invoiceRepo.count({ where: dateFilter }),
+      invoiceRepo.count({ where: { ...dateFilter, status: 'draft' } }),
+      invoiceRepo.count({ where: { ...dateFilter, status: 'sent' } }),
+      invoiceRepo.count({ where: { ...dateFilter, status: 'partialyPaid' } }),
+      invoiceRepo.count({ where: { ...dateFilter, status: 'overdue' } }),
+      invoiceRepo.count({ where: { ...dateFilter, status: 'paid' } }),
+      invoiceRepo.count({ where: [
+        { ...dateFilter, status: 'draft' },
+        { ...dateFilter, status: 'reminder' }
+      ] })
+    ]);
+
+    // Get all invoices for this date range
+    const invoices = await invoiceRepo.find({ where: dateFilter });
+
+    // Calculate totalAmount and totalOutstanding
     const totalAmount = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+    const totalOutstanding = invoices
+      .filter(inv => ['unpaid', 'partialyPaid', 'overdue'].includes(inv.status))
+      .reduce((sum, inv) => sum + inv.amount, 0);
 
     return res.json({
       success: true,
       data: {
         totalInvoices,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
-        paidInvoices,
-        unpaidInvoices,
-        overdueInvoices,
-        draftInvoices,
-        cancelledInvoices
+        totalOutstanding: parseFloat(totalOutstanding.toFixed(2)),
+        unsent: unsentInvoices,
+        draft: draftInvoices,
+        sent: sentInvoices,
+        partial: partialInvoices,
+        overdue: overdueInvoices,
+        paid: paidInvoices
       }
     });
-
   } catch (error) {
     console.error('Error fetching invoice stats:', error);
     return res.status(500).json({
@@ -747,6 +843,71 @@ export const getInvoicesByCustomer = async (req: Request, res: Response): Promis
 
   } catch (error) {
     console.error('Error fetching customer invoices:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+
+/**
+ * @swagger
+ * /api/invoices/{id}/mark-bad:
+ *   put:
+ *     summary: Mark an invoice as bad
+ *     tags: [Invoices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Invoice ID
+ *     responses:
+ *       200:
+ *         description: Invoice marked as bad successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Invoice'
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: Invoice not found
+ *       500:
+ *         description: Internal server error
+ */
+export const markInvoiceAsBad = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const invoice = await invoiceRepo.findOne({ where: { id: parseInt(id), isDelete: false } });
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    invoice.status = 'bad';
+    invoice.markedBadOn = new Date();
+
+    const updatedInvoice = await invoiceRepo.save(invoice);
+
+    return res.json({
+      success: true,
+      data: updatedInvoice,
+      message: 'Invoice marked as bad successfully'
+    });
+  } catch (error) {
+    console.error('Error marking invoice as bad:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error'

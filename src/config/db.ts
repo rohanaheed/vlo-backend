@@ -11,6 +11,18 @@ import { Order } from "../entity/Order";
 import { Currency } from "../entity/Currency";
 import { Invoice } from "../entity/Invioce";
 import { CreditNotes } from "../entity/CreditNotes";
+import { Matter } from "../entity/Matter"
+import { Address } from "../entity/Address"
+import { BankAccounts } from "../entity/BankAccounts"
+import { Business } from "../entity/Business"
+import { ContactDetails } from "../entity/ContactDetails"
+import { Installment } from "../entity/Installment"
+import { InvoiceHistory } from "../entity/InvoiceHistory"
+import { Note } from "../entity/Note"
+import { Reminder } from "../entity/Reminder"
+import { Transaction } from "../entity/Transaction"
+import { TimeBill } from "../entity/TimeBill"
+
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -22,6 +34,13 @@ export const AppDataSource = new DataSource({
   synchronize: true,
   logging: false,
   entities: [
+    Business,
+    ContactDetails,
+    Installment,
+    InvoiceHistory,
+    Note,
+    Reminder,
+    Transaction,
     User,
     Customer,
     BusinessEntity,
@@ -32,6 +51,10 @@ export const AppDataSource = new DataSource({
     Currency,
     Order,
     Invoice,
-    CreditNotes
+    CreditNotes,
+    Matter,
+    Address,
+    BankAccounts,
+    TimeBill
   ]
 });

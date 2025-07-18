@@ -12,9 +12,12 @@ import packageRoutes from "./routes/packageRoutes";
 import invoiceRoutes from "./routes/invoiceRoutes";
 import creditNotesRoutes from "./routes/creditNotesRoutes";
 import noteRoutes from "./routes/noteRoutes";
+import matterRoutes from "./routes/matterRoutes";
+import installmentRoutes from "./routes/installmentRoutes";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import cors from "cors";
+import timeBillRoutes from "./routes/timeBillRoutes";
 
 const app = express();
 app.use(express.json());
@@ -173,6 +176,38 @@ const swaggerOptions = {
             type: { type: 'string', minLength: 1, maxLength: 100 },
           },
         },
+        TimeBill: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            customerId: { type: 'integer' },
+            matterId: { type: 'integer' },
+            entryId: { type: 'integer' },
+            caseWorker: { type: 'string' },
+            matter: { type: 'string' },
+            costDescription: { type: 'string' },
+            unit: { type: 'string' },
+            duration: { type: 'string' },
+            status: { type: 'string' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        TimeBillInput: {
+          type: 'object',
+          properties: {
+            customerId: { type: 'integer' },
+            matterId: { type: 'integer' },
+            entryId: { type: 'integer' },
+            caseWorker: { type: 'string' },
+            matter: { type: 'string' },
+            costDescription: { type: 'string' },
+            unit: { type: 'string' },
+            duration: { type: 'string' },
+            status: { type: 'string' },
+          },
+        },
       },
     },
     security: [{ bearerAuth: [] }],
@@ -196,6 +231,9 @@ app.use("/api/packages", packageRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/credit-notes", creditNotesRoutes);
 app.use("/api/notes", noteRoutes);
+app.use("/api/matters", matterRoutes);
+app.use("/api/installments", installmentRoutes);
+app.use("/api/time-bills", timeBillRoutes);
 
 const PORT = process.env.PORT;
 

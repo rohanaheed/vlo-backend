@@ -195,3 +195,68 @@ export const updateNoteSchema = Joi.object({
   customerId: Joi.number().integer().positive().optional(),
   type: Joi.string().min(1).max(100).optional()
 });
+
+export const matterSchema = Joi.object({
+  customerId: Joi.number().integer().min(1).required(),
+  description: Joi.string().allow('').optional(),
+  fee: Joi.number().min(0).required(),
+  caseWorker: Joi.string().allow('').optional(),
+  supervisor: Joi.string().allow('').optional(),
+  issueDate: Joi.date().iso().optional(),
+});
+
+export const updateMatterSchema = Joi.object({
+  customerId: Joi.number().integer().min(1).optional(),
+  description: Joi.string().allow('').optional(),
+  fee: Joi.number().min(0).optional(),
+  caseWorker: Joi.string().allow('').optional(),
+  supervisor: Joi.string().allow('').optional(),
+  issueDate: Joi.date().iso().optional(),
+});
+
+// Installment validation schemas
+export const installmentSchema = Joi.object({
+  amount: Joi.number().positive().precision(2).required(),
+  dueDate: Joi.date().iso().required(),
+  status: Joi.string().valid('unpaid', 'paid', 'overdue').default('unpaid'),
+  paidDate: Joi.date().iso().allow(null),
+  invoiceId: Joi.number().integer().positive().required()
+});
+
+export const updateInstallmentSchema = Joi.object({
+  amount: Joi.number().positive().precision(2).optional(),
+  dueDate: Joi.date().iso().optional(),
+  status: Joi.string().valid('unpaid', 'paid', 'overdue').optional(),
+  paidDate: Joi.date().iso().allow(null).optional(),
+  invoiceId: Joi.number().integer().positive().optional()
+});
+
+// TimeBill validation schemas
+export const timeBillSchema = Joi.object({
+  customerId: Joi.number().integer().min(1),
+  matterId: Joi.number().integer().min(1),
+  entryId: Joi.number().integer().min(1),
+  caseWorker: Joi.string().allow(),
+  matter: Joi.string().allow(),
+  costDescription: Joi.string().allow(),
+  unit: Joi.string().allow(),
+  duration: Joi.string().allow(),
+  status: Joi.string().allow(),
+  hourlyRate: Joi.string().allow(),
+  activity: Joi.string().allow(),
+  type: Joi.string().allow(),
+  category: Joi.string().allow(),
+  subCategory: Joi.string().allow()
+});
+
+export const updateTimeBillSchema = Joi.object({
+  customerId: Joi.number().integer().min(1),
+  matterId: Joi.number().integer().min(1),
+  entryId: Joi.number().integer().min(1),
+  caseWorker: Joi.string().allow(),
+  matter: Joi.string().allow(),
+  costDescription: Joi.string().allow(),
+  unit: Joi.string().allow(),
+  duration: Joi.string().allow(),
+  status: Joi.string().allow()
+});
