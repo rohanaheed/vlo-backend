@@ -914,3 +914,117 @@ export const markInvoiceAsBad = async (req: Request, res: Response): Promise<any
     });
   }
 };
+
+/**
+ * @swagger
+ * /api/invoices/vat-stats:
+ *   get:
+ *     summary: Get VAT statistics
+ *     tags: [Invoices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for filtering (inclusive, optional)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for filtering (inclusive, optional)
+ *     responses:
+ *       200:
+ *         description: VAT statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalVatCollected:
+ *                       type: number
+ *                     totalVatPaid:
+ *                       type: number
+ *                     netVatOwed:
+ *                       type: number
+ *                     invoicesFiled:
+ *                       type: integer
+ *                     creditNotesApplied:
+ *                       type: number
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Internal server error
+ */
+export const getVatStats = async (req: Request, res: Response): Promise<any> => {
+  try {
+    // Get date filter from query params, fallback to current month
+    let { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+    let filterStart: Date, filterEnd: Date;
+    if (startDate && endDate) {
+      filterStart = new Date(startDate);
+      filterEnd = new Date(endDate);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else {
+      const now = new Date();
+      filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      filterEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    }
+
+    // Common filter for date range and not deleted
+    const dateFilter = {
+      isDelete: false,
+      createdAt: Between(filterStart, filterEnd)
+    };
+
+    // Get current logged in user (assumes req.user is set by auth middleware)
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized: User not found" });
+    }
+
+    // Get all invoices for this date range and user
+    const invoices = await invoiceRepo.find({ where: { ...dateFilter, userId } });
+
+    // Get all credit notes for this date range and user
+    const creditNoteRepo = AppDataSource.getRepository(require('../entity/CreditNotes').CreditNotes);
+    const creditNotes = await creditNoteRepo.find({ where: { ...dateFilter, userId } });
+
+    // Calculate total VAT collected
+    const totalVatCollected = invoices.reduce((sum, inv) => sum + (Number(inv.vat) || 0), 0);
+    // Total VAT paid (no expense entity, so 0 for now)
+    const totalVatPaid = 0;
+    // Net VAT owed
+    const netVatOwed = totalVatCollected - totalVatPaid;
+    // Invoices filed
+    const invoicesFiled = invoices.length;
+    // Credit notes applied (sum of amount field)
+    const creditNotesApplied = creditNotes.reduce((sum, cn) => sum + (Number(cn.amount) || 0), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        totalVatCollected: parseFloat(totalVatCollected.toFixed(2)),
+        totalVatPaid: parseFloat(totalVatPaid.toFixed(2)),
+        netVatOwed: parseFloat(netVatOwed.toFixed(2)),
+        invoicesFiled,
+        creditNotesApplied: parseFloat(creditNotesApplied.toFixed(2))
+      },
+      message: 'VAT statistics calculated successfully'
+    });
+  } catch (error) {
+    console.error('Error fetching VAT stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};

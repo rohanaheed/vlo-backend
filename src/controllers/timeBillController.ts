@@ -372,3 +372,124 @@ export const bulkDeleteTimeBills = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "Failed to bulk delete TimeBills", error });
   }
 };
+
+/**
+ * @swagger
+ * /api/time-bills/calendar-summary:
+ *   get:
+ *     summary: Get calendar summary of time bills (grouped by day, with totals)
+ *     tags: [TimeBills]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter by dateOfWork >= this date (default: first day of current month)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter by dateOfWork <= this date (default: last day of current month)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by status (optional)
+ *     responses:
+ *       200:
+ *         description: Calendar summary of time bills
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 days:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       date:
+ *                         type: string
+ *                         format: date
+ *                       totalAmount:
+ *                         type: number
+ *                       totalHours:
+ *                         type: number
+ *                 totalMonthlyHours:
+ *                   type: number
+ *                 totalMonthlyBill:
+ *                   type: number
+ *       500:
+ *         description: Internal server error
+ */
+export const getTimeBillCalendarSummary = async (req: Request, res: Response) => {
+  try {
+    // Parse date range
+    let { startDate, endDate, status } = req.query;
+    let filterStart: Date, filterEnd: Date;
+    if (startDate && endDate) {
+      filterStart = new Date(startDate as string);
+      filterEnd = new Date(endDate as string);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else {
+      const now = new Date();
+      filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      filterEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    }
+
+    // Build query
+    const qb = timeBillRepository.createQueryBuilder("timeBill")
+      .where("timeBill.isDelete = :isDelete", { isDelete: false })
+      .andWhere("timeBill.dateOfWork >= :startDate AND timeBill.dateOfWork <= :endDate", {
+        startDate: filterStart,
+        endDate: filterEnd
+      });
+    if (status) {
+      qb.andWhere("timeBill.status LIKE :status", { status: `%${status}%` });
+    }
+    const timeBills = await qb.getMany();
+
+    // Group by day
+    const dayMap: Record<string, { totalAmount: number; totalHours: number }> = {};
+    let totalMonthlyHours = 0;
+    let totalMonthlyBill = 0;
+    for (const tb of timeBills) {
+      // Parse duration and hourlyRate
+      let hours = 0;
+      let rate = 0;
+      // Try to parse duration as float (hours)
+      if (tb.duration) {
+        // Support "1.5" or "01:30" format
+        if (/^\d{1,2}:\d{2}$/.test(tb.duration)) {
+          const [h, m] = tb.duration.split(":").map(Number);
+          hours = h + m / 60;
+        } else {
+          hours = parseFloat(tb.duration);
+        }
+      }
+      if (tb.hourlyRate) {
+        rate = parseFloat(tb.hourlyRate);
+      }
+      const amount = hours * rate;
+      const day = tb.dateOfWork ? new Date(tb.dateOfWork).toISOString().slice(0, 10) : (tb.createdAt ? new Date(tb.createdAt).toISOString().slice(0, 10) : "");
+      if (!dayMap[day]) {
+        dayMap[day] = { totalAmount: 0, totalHours: 0 };
+      }
+      dayMap[day].totalAmount += amount;
+      dayMap[day].totalHours += hours;
+      totalMonthlyHours += hours;
+      totalMonthlyBill += amount;
+    }
+    // Convert to array sorted by date
+    const days = Object.entries(dayMap)
+      .map(([date, { totalAmount, totalHours }]) => ({ date, totalAmount, totalHours }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    res.status(200).json({ days, totalMonthlyHours, totalMonthlyBill });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to get calendar summary", error });
+  }
+};

@@ -22,6 +22,7 @@ import { Note } from "../entity/Note"
 import { Reminder } from "../entity/Reminder"
 import { Transaction } from "../entity/Transaction"
 import { TimeBill } from "../entity/TimeBill"
+import { Document } from "../entity/Documents"
 
 
 export const AppDataSource = new DataSource({
@@ -55,6 +56,7 @@ export const AppDataSource = new DataSource({
     Matter,
     Address,
     BankAccounts,
-    TimeBill
+    TimeBill,
+    Document
   ]
 });

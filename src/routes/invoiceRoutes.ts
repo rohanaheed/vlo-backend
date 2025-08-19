@@ -7,7 +7,8 @@ import {
   deleteInvoice, 
   getInvoiceStats,
   getInvoicesByCustomer,
-  markInvoiceAsBad
+  markInvoiceAsBad,
+  getVatStats
 } from "../controllers/invoiceController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -30,6 +31,9 @@ router.get("/customer/:customerId", authorize(["super_admin"]), asyncHandler(get
 
 // Get invoice by ID
 router.get("/:id", authorize(["super_admin"]), asyncHandler(getInvoiceById));
+
+//get vat stats
+router.get("/vat-stats", authorize(["super_admin"]), asyncHandler(getVatStats));
 
 // Update invoice
 router.put("/:id", authorize(["super_admin"]), validateRequest(updateInvoiceSchema), asyncHandler(updateInvoice));

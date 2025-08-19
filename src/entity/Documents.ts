@@ -2,39 +2,45 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 
 
 @Entity()
-export class Matter {
+export class Document {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column({ default: 0 })
   customerId!: number;
 
-  @Column({ default: ""})
+  @Column({ default: 0 })
+  userId!: number;
+
+  @Column({ default: 0 })
+  matterId!: number;
+
+  @Column({ default: "" })
+  title!: string;
+
+  @Column({ default: 0 })
+  type!: string;
+
+  @Column({ default: 0 })
   description!: string;
 
   @Column({ default: 0 })
-  fee!: number;
+  fileUrl!: string;
+
+  @Column({ type: "simple-array", default: "" })
+  sharedWith!: string[];
 
   @Column({ default: "" })
-  caseWorker!: string;
+  createdBy!: string;
 
   @Column({ default: "" })
   status!: string;
 
   @Column({ default: "" })
-  participants!: object;
+  responses!: object;
 
   @Column({ default: "" })
-  supervisor!: string;
-
-  @Column({ default: "" })
-  issueDate!: Date;
-
-  @Column({ default: "" })
-  startDate!: Date;
-
-  @Column({ default: "" })
-  closeDate!: Date;
+  lastLogActivity!: string;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -44,5 +50,4 @@ export class Matter {
 
   @Column({ default: false })
   isDelete!: boolean;
-
 }

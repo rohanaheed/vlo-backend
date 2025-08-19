@@ -1,5 +1,8 @@
 import { Router } from 'express';
-import { createTimeBill, updateTimeBill, getAllTimeBills, getTimeBillById, deleteTimeBill, bulkDeleteTimeBills } from '../controllers/timeBillController';
+import {
+  createTimeBill, updateTimeBill, getAllTimeBills, getTimeBillById, deleteTimeBill, bulkDeleteTimeBills,
+  getTimeBillCalendarSummary
+ } from '../controllers/timeBillController';
 import { authorize } from '../middleware/auth';
 import { asyncHandler } from "../middleware/asyncHandler";
 import { timeBillSchema, updateTimeBillSchema } from "../utils/validators/inputValidator";
@@ -27,5 +30,8 @@ router.put('/:id', authorize(["super_admin"]), validateRequest(updateTimeBillSch
 
 // Soft delete timebill by ID
 router.delete('/:id', authorize(["super_admin"]), asyncHandler(deleteTimeBill));
+
+// Calendar summary (grouped by day, with totals)
+router.get('/calendar-summary', authorize(["super_admin"]), asyncHandler(getTimeBillCalendarSummary));
 
 export default router;

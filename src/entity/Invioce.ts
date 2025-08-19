@@ -29,6 +29,9 @@ export class Invoice {
   customerId!: number;
 
   @Column({ default: 0 })
+  userId!: number;
+
+  @Column({ default: 0 })
   currencyId!: number;
 
   @Column({ default: 0 })
