@@ -46,8 +46,8 @@ export class Package {
   @Column({ default: "active" })
   annualStatus!: string;
 
-  @Column({ default: "" })
-  moduleInPackage!: string;
+  @Column("simple-array", { default: [] })
+  includedFeatures!: string[];
 
   @Column({ default: false })
   isDefault!: boolean;

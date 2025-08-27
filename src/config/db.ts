@@ -23,7 +23,11 @@ import { Reminder } from "../entity/Reminder"
 import { Transaction } from "../entity/Transaction"
 import { TimeBill } from "../entity/TimeBill"
 import { Document } from "../entity/Documents"
-
+import { Complain } from "../entity/Complain"
+import { Ticket } from "../entity/Ticket"
+import { Task } from "../entity/Task"
+import { Subtask } from "../entity/Subtask"
+import { HeadsUp } from "../entity/HeadsUp"
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -32,7 +36,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  synchronize: true,
+  synchronize: false,
   logging: false,
   entities: [
     Business,
@@ -57,6 +61,11 @@ export const AppDataSource = new DataSource({
     Address,
     BankAccounts,
     TimeBill,
-    Document
+    Document,
+    Complain,
+    Ticket,
+    Task,
+    Subtask,
+    HeadsUp
   ]
 });

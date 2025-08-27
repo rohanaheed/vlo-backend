@@ -17,8 +17,7 @@ export class Note {
   
   @Column({ default: "" })
   type!: string;
-
-
+  
   @UpdateDateColumn()
   updatedAt!: Date;
 

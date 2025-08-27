@@ -62,7 +62,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.email = value.email;
     customer.password = await bcrypt.hash(value.password, 10); // Note: You should hash this password!
     customer.status = value.status as Status;
-    customer.expirayDate = value.expirayDate || new Date(); // Default to current date
+    customer.expiryDate = value.expiryDate || new Date(); // Default to current date
     customer.isDelete = false;
     customer.createdAt = new Date();
     customer.updatedAt = new Date();
@@ -213,6 +213,69 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
 
 /**
  * @swagger
+ * /api/customers/deleted:
+ *   get:
+ *     summary: Get only deleted customers (paginated)
+ *     tags: [Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of items per page
+ *     responses:
+ *       200:
+ *         description: List of deleted customers
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Customer'
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *                 totalItems:
+ *                   type: integer
+ */
+export const getDeletedCustomers = async (req: Request, res: Response): Promise<any> => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+
+  const [customers, total] = await customerRepo.findAndCount({
+    where: { isDelete: true },
+    skip: (page - 1) * limit,
+    take: limit,
+    order: {
+      createdAt: "DESC",
+    },
+    relations: ["subscriptions"],
+  });
+
+  return res.json({
+    data: customers,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    totalItems: total,
+  });
+};
+
+/**
+ * @swagger
  * /api/customers/{id}:
  *   put:
  *     summary: Update a customer
@@ -350,7 +413,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       email: customer.email,
       practiceArea: customer.practiceArea,
       status: customer.status,
-      expirayDate: customer.expirayDate,
+      expiryDate: customer.expiryDate,
       packageId: customer.packageId,
       isDelete: customer.isDelete,
       createdAt: customer.createdAt,
@@ -476,3 +539,7 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
     });
   }
 };
+
+
+
+

@@ -71,7 +71,7 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
     monthlyStatus,
     annualStatus,
     isDefault,
-    moduleInPackage,
+    // moduleInPackage,
     isDelete: false
   });
 
@@ -234,7 +234,7 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   if (monthlyStatus !== undefined) updateData.monthlyStatus = monthlyStatus;
   if (annualStatus !== undefined) updateData.annualStatus = annualStatus;
   if (isDefault !== undefined) updateData.isDefault = isDefault;
-  if (moduleInPackage !== undefined) updateData.moduleInPackage = moduleInPackage;
+  // if (moduleInPackage !== undefined) updateData.moduleInPackage = moduleInPackage;
   Object.assign(packageItem, updateData);
 
   await packageRepo.save(packageItem);

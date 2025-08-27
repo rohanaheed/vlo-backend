@@ -66,7 +66,13 @@ export class Customer {
   status!: Status;
 
   @CreateDateColumn()
-  expirayDate!: string;
+  expiryDate!: Date;
+
+  @CreateDateColumn()
+  deletedAt!: Date;
+
+  @CreateDateColumn()
+  reasonForDeletion!: string;
 
   @Column({ default: 0 })
   packageId!: number;
