@@ -1,13 +1,16 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/db';
 import { Customer } from '../entity/Customer';
+import { User } from '../entity/User';
 import { customerSchema } from '../utils/validators/inputValidator';
 import { Status } from '../entity/Customer';
 import bcrypt from 'bcryptjs';
 import { IsNull, Not } from 'typeorm';
-import { sendCompanyRegistrationEmail } from '../utils/emailUtils';
+import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/emailUtils';
+import { UserRole } from '../entity/User';
 
 const customerRepo = AppDataSource.getRepository(Customer);
+const userRepo = AppDataSource.getRepository(User);
 
 /**
  * @swagger
@@ -50,6 +53,8 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
 
     // Create customer instance
     const customer = new Customer();
+    customer.createdByUserId = userId;
+    customer.logo = value.logo || '';
     customer.firstName = value.firstName;
     customer.lastName = value.lastName;
     customer.businessName = value.businessName;
@@ -58,18 +63,50 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.businessSize = value.businessSize;
     customer.businessEntity = value.businessEntity;
     customer.businessType = value.businessType;
+    customer.businessAddress = value.businessAddress || '';
     customer.phoneNumber = value.phoneNumber;
     customer.email = value.email;
     customer.password = await bcrypt.hash(value.password, 10); // Note: You should hash this password!
+    customer.practiceArea = value.practiceArea || [];
     customer.status = value.status as Status;
     customer.expiryDate = value.expiryDate || new Date(); // Default to current date
     customer.isDelete = false;
     customer.createdAt = new Date();
     customer.updatedAt = new Date();
-    customer.userId = userId;
 
     const savedCustomer = await customerRepo.save(customer);
+    // Save the customer
+    // Check if user already exists in the user table
+    const existingUser = await userRepo.findOne({ where: { email: customer.email, isDelete: false } });
+    if (existingUser) {
+      return console.warn({
+        success: false,
+        message: 'A user with this email already exists.'
+      });
+    }
 
+    // Also create a user record for this customer so they can log in
+    const user = new User();
+    user.name = savedCustomer.firstName + " " + savedCustomer.lastName;
+    user.email = savedCustomer.email;
+    user.password = savedCustomer.password; // already hashed above
+    user.role = 'customer' as UserRole; // or whatever role you use for customers
+    user.isDelete = false;
+    user.createdAt = new Date();
+    user.updatedAt = new Date();
+
+    const savedUser = await userRepo.save(user);
+
+    // Send email verification to user before allowing login
+    const verificationEmailSent = await sendVerificationEmail(
+      savedUser.email,
+      savedUser.name,
+      process.env.FRONTEND_VERIFY_EMAIL_URL || 'https://vhr-system.com/verify-email'
+    );
+
+    if (!verificationEmailSent) {
+      console.warn(`Failed to send verification email to ${savedUser.email} for user ${savedUser.id}`);
+    }
     // Send registration email
     const customerName = `${savedCustomer.firstName} ${savedCustomer.lastName}`;
     const emailSent = await sendCompanyRegistrationEmail(
@@ -137,7 +174,7 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
     where: [{ status: "Trial" }, { status: "Free" }, { status: "License Expired" }]
   });
 
-  const totalSubscriptions = await customerRepo.count({ where: { packageId: Not(IsNull()) } });
+  const totalSubscriptions = await customerRepo.count({ where: { subscriptionId: Not(IsNull()) } });
 
   return res.json({
     totalCustomers,
@@ -387,7 +424,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
     // Check if user has permission to view this customer
     // Super admin can view all customers, regular users can only view their own customers
     const userRole = (req as any).user.role;
-    if (userRole !== "super_admin" && customer.userId !== userId) {
+    if (userRole !== "super_admin" && customer.createdByUserId !== userId) {
       return res.status(403).json({
         success: false,
         message: "Access denied. You can only view your own customers."
@@ -397,7 +434,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
     // Remove sensitive information before sending response
     const customerData = {
       id: customer.id,
-      userId: customer.userId,
+      userId: customer.createdByUserId,
       logo: customer.logo,
       firstName: customer.firstName,
       lastName: customer.lastName,
@@ -414,7 +451,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       practiceArea: customer.practiceArea,
       status: customer.status,
       expiryDate: customer.expiryDate,
-      packageId: customer.packageId,
+      subscriptionId: customer.subscriptionId,
       isDelete: customer.isDelete,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt
@@ -493,7 +530,7 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
     // Check if user has permission to send email for this customer
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
-    if (userRole !== "super_admin" && customer.userId !== userId) {
+    if (userRole !== "super_admin" && customer.createdByUserId !== userId) {
       return res.status(403).json({
         success: false,
         message: "Access denied. You can only send emails for your own customers."

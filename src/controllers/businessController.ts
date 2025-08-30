@@ -16,6 +16,7 @@ const businessTypeRepo = AppDataSource.getRepository(BusinessType);
  *     tags: [Business]
  *     security:
  *       - bearerAuth: []
+ *     description: This endpoint requires authentication. Provide a valid bearer token in the Authorization header.
  *     requestBody:
  *       required: true
  *       content:
@@ -30,6 +31,8 @@ const businessTypeRepo = AppDataSource.getRepository(BusinessType);
  *     responses:
  *       201:
  *         description: Business type created successfully
+ *       401:
+ *         description: Unauthorized. Authentication required.
  *       409:
  *         description: BusinessType already exists
  */

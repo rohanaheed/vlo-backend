@@ -18,16 +18,16 @@ export class Document {
   @Column({ default: "" })
   title!: string;
 
-  @Column({ default: 0 })
+  @Column({ default: "" })
   type!: string;
 
-  @Column({ default: 0 })
+  @Column({ default: "" })
   description!: string;
 
-  @Column({ default: 0 })
+  @Column({ default: "" })
   fileUrl!: string;
 
-  @Column({ type: "simple-array", default: "" })
+  @Column({ type: "simple-array", nullable: true })
   sharedWith!: string[];
 
   @Column({ default: "" })
@@ -36,8 +36,8 @@ export class Document {
   @Column({ default: "" })
   status!: string;
 
-  @Column({ default: "" })
-  responses!: object;
+  @Column({ type: "json", nullable: true })
+  responses!: Record<string, any>;
 
   @Column({ default: "" })
   lastLogActivity!: string;

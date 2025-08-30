@@ -13,7 +13,7 @@ export class Subtask {
   @Column({ default: "" })
   assignee!: string;
 
-  @Column({ type: "timestamp", default: null })
+  @Column({ type: "timestamp", nullable: true })
   dueDate!: Date | null;
 
   @Column({ default: "" })

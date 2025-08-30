@@ -37,10 +37,10 @@ export class Invoice {
   @Column({ default: 0 })
   orderId!: number;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp", nullable: true })
   dueDate!: Date;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp", nullable: true })
   markedBadOn!: Date;
 
   @Column({ default: "" })
@@ -49,19 +49,19 @@ export class Invoice {
   @Column({ default: "" })
   priority!: string;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   discount!: number;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   vat!: number;
 
   @Column({ default: "" })
   discountType!: string;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   subTotal!: number;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   outstandingBalance!: number;
 
   @Column({ default: "" })
@@ -70,7 +70,7 @@ export class Invoice {
   @Column({ default: "" })
   recurringInterval!: string;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   recurringCount!: number;
 
   @Column({ default: "" })

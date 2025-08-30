@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AppDataSource } from "../config/db";
 import { Package } from "../entity/Package";
+import { MoreThan } from "typeorm";
 
 const packageRepo = AppDataSource.getRepository(Package);
 
@@ -17,7 +18,74 @@ const packageRepo = AppDataSource.getRepository(Package);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Package'
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Package name
+ *               description:
+ *                 type: string
+ *                 description: Package description
+ *               price:
+ *                 type: number
+ *                 description: Package price
+ *               billingCycle:
+ *                 type: string
+ *                 enum: [Monthly, Annual]
+ *                 description: Billing cycle
+ *               isActive:
+ *                 type: boolean
+ *                 description: Whether the package is active
+ *               includedFeatures:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of included features
+ *               integrations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of integrations
+ *               communicationTools:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of communication tools
+ *               cloudStorage:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of cloud storage options
+ *               socialMediaConnectors:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of social media connectors
  *     responses:
  *       201:
  *         description: Package created successfully
@@ -33,20 +101,14 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   const {
     name,
     description,
-    monthlyPrice,
-    annualPrice,
+    price,
     billingCycle,
-    duration,
-    maxEmployees,
-    maxClients,
-    isFree,
-    isPrivate,
-    isAutoRenewal,
     isActive,
-    monthlyStatus,
-    annualStatus,
-    isDefault,
-    moduleInPackage
+    includedFeatures,
+    integrations,
+    communicationTools,
+    cloudStorage,
+    socialMediaConnectors
   } = req.body;
 
   // Check if package with same name already exists
@@ -58,20 +120,14 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   const newPackage = packageRepo.create({
     name,
     description,
-    monthlyPrice,
-    annualPrice,
+    price,
     billingCycle,
-    duration,
-    maxEmployees,
-    maxClients,
-    isFree,
-    isPrivate,
-    isAutoRenewal,
     isActive,
-    monthlyStatus,
-    annualStatus,
-    isDefault,
-    // moduleInPackage,
+    includedFeatures,
+    integrations,
+    communicationTools,
+    cloudStorage,
+    socialMediaConnectors,
     isDelete: false
   });
 
@@ -165,7 +221,74 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Package'
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Package name
+ *               description:
+ *                 type: string
+ *                 description: Package description
+ *               price:
+ *                 type: number
+ *                 description: Package price
+ *               billingCycle:
+ *                 type: string
+ *                 enum: [Monthly, Annual]
+ *                 description: Billing cycle
+ *               isActive:
+ *                 type: boolean
+ *                 description: Whether the package is active
+ *               includedFeatures:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of included features
+ *               integrations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of integrations
+ *               communicationTools:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of communication tools
+ *               cloudStorage:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of cloud storage options
+ *               socialMediaConnectors:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *                 description: List of social media connectors
  *     responses:
  *       200:
  *         description: Package updated successfully
@@ -184,20 +307,14 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   const {
     name,
     description,
-    monthlyPrice,
-    annualPrice,
+    price,
     billingCycle,
-    duration,
-    maxEmployees,
-    maxClients,
-    isFree,
-    isPrivate,
-    isAutoRenewal,
     isActive,
-    monthlyStatus,
-    annualStatus,
-    isDefault,
-    moduleInPackage
+    includedFeatures,
+    integrations,
+    communicationTools,
+    cloudStorage,
+    socialMediaConnectors
   } = req.body;
 
   const packageItem = await packageRepo.findOne({
@@ -221,20 +338,15 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
-  if (monthlyPrice !== undefined) updateData.monthlyPrice = monthlyPrice;
-  if (annualPrice !== undefined) updateData.annualPrice = annualPrice;
+  if (price !== undefined) updateData.price = price;
   if (billingCycle !== undefined) updateData.billingCycle = billingCycle;
-  if (duration !== undefined) updateData.duration = duration;
-  if (maxEmployees !== undefined) updateData.maxEmployees = maxEmployees;
-  if (maxClients !== undefined) updateData.maxClients = maxClients;
-  if (isFree !== undefined) updateData.isFree = isFree;
-  if (isPrivate !== undefined) updateData.isPrivate = isPrivate;
-  if (isAutoRenewal !== undefined) updateData.isAutoRenewal = isAutoRenewal;
   if (isActive !== undefined) updateData.isActive = isActive;
-  if (monthlyStatus !== undefined) updateData.monthlyStatus = monthlyStatus;
-  if (annualStatus !== undefined) updateData.annualStatus = annualStatus;
-  if (isDefault !== undefined) updateData.isDefault = isDefault;
-  // if (moduleInPackage !== undefined) updateData.moduleInPackage = moduleInPackage;
+  if (includedFeatures !== undefined) updateData.includedFeatures = includedFeatures;
+  if (integrations !== undefined) updateData.integrations = integrations;
+  if (communicationTools !== undefined) updateData.communicationTools = communicationTools;
+  if (cloudStorage !== undefined) updateData.cloudStorage = cloudStorage;
+  if (socialMediaConnectors !== undefined) updateData.socialMediaConnectors = socialMediaConnectors;
+  
   Object.assign(packageItem, updateData);
 
   await packageRepo.save(packageItem);
@@ -310,40 +422,9 @@ export const getActivePackages = async (req: Request, res: Response): Promise<an
 
 /**
  * @openapi
- * /api/packages/default:
- *   get:
- *     summary: Get default package
- *     tags: [Packages]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Default package found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Package'
- *       404:
- *         description: Default package not found
- */
-// Get default package
-export const getDefaultPackage = async (req: Request, res: Response): Promise<any> => {
-  const packageItem = await packageRepo.findOne({
-    where: { isDefault: true, isActive: true, isDelete: false }
-  });
-
-  if (!packageItem) {
-    return res.status(404).json({ message: "Default package not found" });
-  }
-
-  return res.json(packageItem);
-};
-
-/**
- * @openapi
  * /api/packages/free:
  *   get:
- *     summary: Get free packages
+ *     summary: Get free packages (price = 0)
  *     tags: [Packages]
  *     security:
  *       - bearerAuth: []
@@ -357,10 +438,10 @@ export const getDefaultPackage = async (req: Request, res: Response): Promise<an
  *               items:
  *                 $ref: '#/components/schemas/Package'
  */
-// Get free packages
+// Get free packages (price = 0)
 export const getFreePackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
-    where: { isFree: true, isActive: true, isDelete: false },
+    where: { price: 0, isActive: true, isDelete: false },
     order: { createdAt: "DESC" }
   });
   return res.json(packages);
@@ -368,63 +449,68 @@ export const getFreePackages = async (req: Request, res: Response): Promise<any>
 
 /**
  * @openapi
- * /api/packages/{id}/auto-renewal:
- *   patch:
- *     summary: Enable/Disable auto-renewal for a package
+ * /api/packages/paid:
+ *   get:
+ *     summary: Get paid packages (price > 0)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of paid packages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ */
+// Get paid packages (price > 0)
+export const getPaidPackages = async (req: Request, res: Response): Promise<any> => {
+  const packages = await packageRepo.find({
+    where: { price: MoreThan(0), isActive: true, isDelete: false },
+    order: { createdAt: "DESC" }
+  });
+  return res.json(packages);
+};
+
+/**
+ * @openapi
+ * /api/packages/billing-cycle/{cycle}:
+ *   get:
+ *     summary: Get packages by billing cycle
  *     tags: [Packages]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: cycle
  *         required: true
  *         schema:
- *           type: integer
- *         description: Package ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               isAutoRenewal:
- *                 type: boolean
- *                 description: Enable or disable auto-renewal
+ *           type: string
+ *           enum: [Monthly, Annual]
+ *         description: Billing cycle
  *     responses:
  *       200:
- *         description: Auto-renewal status updated
+ *         description: List of packages for the specified billing cycle
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 package:
- *                   $ref: '#/components/schemas/Package'
- *       404:
- *         description: Package not found
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
  */
-// Enable/Disable auto-renewal for a package
-export const toggleAutoRenewal = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
-  const { isAutoRenewal } = req.body;
-
-  const packageItem = await packageRepo.findOne({
-    where: { id: Number(id), isDelete: false }
-  });
-
-  if (!packageItem) {
-    return res.status(404).json({ message: "Package not found" });
+// Get packages by billing cycle
+export const getPackagesByBillingCycle = async (req: Request, res: Response): Promise<any> => {
+  const { cycle } = req.params;
+  
+  if (cycle !== 'Monthly' && cycle !== 'Annual') {
+    return res.status(400).json({ message: "Invalid billing cycle. Must be 'Monthly' or 'Annual'" });
   }
 
-  // Update the auto-renewal setting
-  packageItem.isAutoRenewal = isAutoRenewal;
-  await packageRepo.save(packageItem);
-
-  return res.json({
-    message: `Auto-renewal ${isAutoRenewal ? 'enabled' : 'disabled'} successfully`,
-    package: packageItem
+  const packages = await packageRepo.find({
+    where: { billingCycle: cycle, isActive: true, isDelete: false },
+    order: { createdAt: "DESC" }
   });
+  return res.json(packages);
 };

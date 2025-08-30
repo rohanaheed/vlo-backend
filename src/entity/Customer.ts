@@ -15,7 +15,7 @@ export class Customer {
   id!: number;
 
   @Column({ default: 0 })
-  userId!: number;
+  createdByUserId!: number;
 
   @Column({ default: "" })
   logo!: string;
@@ -75,7 +75,7 @@ export class Customer {
   reasonForDeletion!: string;
 
   @Column({ default: 0 })
-  packageId!: number;
+  subscriptionId!: number;
 
   @Column({ default: false })
   isDelete!: boolean;

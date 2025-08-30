@@ -3,7 +3,7 @@ import { AppDataSource } from "../config/db";
 import { User } from "../entity/User";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { generateOTP, sendOTPEmail, sendPasswordResetSuccessEmail } from "../utils/emailUtils";
+import { generateOTP, sendOTPEmail, sendPasswordResetSuccessEmail, sendVerificationEmail } from "../utils/emailUtils";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret"; // move to env file in production
 
@@ -55,10 +55,19 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
     role: role === "super_admin" ? "super_admin" : "user", // only allow predefined roles
     isDelete: false,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    isVarified: false
   });
 
   await userRepo.save(user);
+
+  // Send verification email to user
+  await sendVerificationEmail(
+    user.email,
+    user.name,
+    user.id.toString(), // using user id as token, adjust as needed
+    process.env.FRONTEND_VERIFY_EMAIL_URL || 'https://vhr-system.com/verify-email'
+  );
 
   const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1h" });
 
@@ -114,6 +123,10 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   // ❌ If user is marked as deleted
   if (user.isDelete) {
     return res.status(403).json({ message: "Account has been deactivated" });
+  }
+  // ❌ If user is not verified
+  if (!user.isVarified) {
+    return res.status(403).json({ message: "Account is not verified. Please check your email for verification instructions." });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -252,7 +265,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
  * @openapi
  * /api/auth/reset-password:
  *   post:
- *     summary: Reset password using OTP
+ *     summary: Reset password
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -262,25 +275,20 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
  *             type: object
  *             required:
  *               - email
- *               - otp
  *               - newPassword
  *             properties:
  *               email:
- *                 type: string
- *               otp:
  *                 type: string
  *               newPassword:
  *                 type: string
  *     responses:
  *       200:
  *         description: Password reset successfully
- *       400:
- *         description: Invalid or expired OTP
  *       404:
  *         description: User not found
  */
 export const resetPassword = async (req: Request, res: Response): Promise<any> => {
-  const { email, otp, newPassword } = req.body;
+  const { email, newPassword } = req.body;
 
   const userRepo = AppDataSource.getRepository(User);
   const user = await userRepo.findOne({ where: { email, isDelete: false } });
@@ -289,31 +297,11 @@ export const resetPassword = async (req: Request, res: Response): Promise<any> =
     return res.status(404).json({ message: "User not found" });
   }
 
-  // Check if OTP exists and is not expired
-  if (!user.otp || !user.otpExpiry) {
-    return res.status(400).json({ message: "No OTP found. Please request a new OTP." });
-  }
-
-  if (new Date() > user.otpExpiry) {
-    // Clear expired OTP
-    user.otp = null;
-    user.otpExpiry = null;
-    await userRepo.save(user);
-    return res.status(400).json({ message: "OTP has expired. Please request a new OTP." });
-  }
-
-  // Verify OTP
-  if (user.otp !== otp) {
-    return res.status(400).json({ message: "Invalid OTP. Please check and try again." });
-  }
-
   // Hash new password
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
   // Update password and clear OTP
   user.password = hashedPassword;
-  user.otp = null;
-  user.otpExpiry = null;
   await userRepo.save(user);
 
   // Send success email
@@ -321,5 +309,64 @@ export const resetPassword = async (req: Request, res: Response): Promise<any> =
 
   res.json({ 
     message: "Password reset successfully. You can now login with your new password."
+  });
+};
+
+/**
+ * @openapi
+ * /api/auth/verify-user:
+ *   post:
+ *     summary: Verify a user account
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User verified successfully
+ *       404:
+ *         description: User not found
+ *       400:
+ *         description: User is already verified
+ */
+export const verifyUser = async (req: Request, res: Response): Promise<any> => {
+  const { email } = req.body;
+
+  const userRepo = AppDataSource.getRepository(User);
+  const user = await userRepo.findOne({ where: { email: email, isDelete: false } });
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (user.isVarified) {
+    return res.status(400).json({ message: "User is already verified" });
+  }
+
+  // Update user verification status
+  user.isVarified = true;
+  user.updatedAt = new Date();
+  await userRepo.save(user);
+
+  res.json({ 
+    message: "User is verified now",
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isVarified: user.isVarified,
+      isDelete: user.isDelete,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }
   });
 };

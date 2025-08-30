@@ -9,7 +9,7 @@ export class TimeBill {
   @Column({ default: 0 })
   customerId!: number;
 
-  @Column({ default: "" })
+  @Column({ default: 0 })
   matterId!: number;
 
   @Column({ default: 0 })
@@ -45,7 +45,7 @@ export class TimeBill {
   @Column({ default: "" })
   subCategory!: string;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp", nullable: true })
   dateOfWork!: Date;
 
   @Column({ default: "" })

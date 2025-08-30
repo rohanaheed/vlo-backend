@@ -6,12 +6,12 @@ import {
   updatePackage,
   deletePackage,
   getActivePackages,
-  getDefaultPackage,
   getFreePackages,
-  toggleAutoRenewal
+  getPaidPackages,
+  getPackagesByBillingCycle
 } from "../controllers/packageController";
 import { validateRequest } from "../middleware/validateRequest";
-import { packageSchema, autoRenewalSchema } from "../utils/validators/inputValidator";
+import { packageSchema } from "../utils/validators/inputValidator";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
@@ -42,21 +42,16 @@ router.put(
 // Delete package (soft delete)
 router.delete("/:id", authorize(["super_admin"]), asyncHandler(deletePackage));
 
-// Toggle auto-renewal for a package
-router.patch(
-  "/:id/auto-renewal",
-  authorize(["super_admin"]),
-  validateRequest(autoRenewalSchema),
-  asyncHandler(toggleAutoRenewal)
-);
-
 // Get active packages only
 router.get("/active/list", authorize(["super_admin", "user"]), asyncHandler(getActivePackages));
 
-// Get default package
-router.get("/default/package", authorize(["super_admin", "user"]), asyncHandler(getDefaultPackage));
-
 // Get free packages
 router.get("/free/list", authorize(["super_admin", "user"]), asyncHandler(getFreePackages));
+
+// Get paid packages
+router.get("/paid/list", authorize(["super_admin", "user"]), asyncHandler(getPaidPackages));
+
+// Get packages by billing cycle
+router.get("/billing-cycle/:cycle", authorize(["super_admin", "user"]), asyncHandler(getPackagesByBillingCycle));
 
 export default router; 

@@ -21,19 +21,19 @@ export class Matter {
   @Column({ default: "" })
   status!: string;
 
-  @Column({ default: "" })
-  participants!: object;
+  @Column({ type: "json", nullable: true })
+  participants!: Record<string, any>;
 
   @Column({ default: "" })
   supervisor!: string;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp" })
   issueDate!: Date;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp" })
   startDate!: Date;
 
-  @Column({ default: "" })
+  @Column({ type: "timestamp" })
   closeDate!: Date;
 
   @CreateDateColumn()

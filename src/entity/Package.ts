@@ -1,4 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
+export type BillingCycle = "Monthly" | "Annual";
 @Entity()
 export class Package {
   @PrimaryGeneratedColumn()
@@ -11,46 +13,28 @@ export class Package {
   description!: string;
 
   @Column({ default: 0 })
-  monthlyPrice!: number;
+  price!: number;
 
-  @Column({ default: 0 })
-  annualPrice!: number;
-
-  @Column({ default: 1 })
-  billingCycle!: number;
-
-  @Column({ default: 1 })
-  duration!: number;
-
-  @Column({ default: 0 })
-  maxEmployees!: number;
-
-  @Column({ default: 0 })
-  maxClients!: number;
-
-  @Column({ default: false })
-  isFree!: boolean;
-
-  @Column({ default: false })
-  isPrivate!: boolean;
-
-  @Column({ default: false })
-  isAutoRenewal!: boolean;
+  @Column({ type: "enum", enum: ["Monthly", "Annual"], default: "" })
+  billingCycle!: BillingCycle;
 
   @Column({ default: true })
   isActive!: boolean;
 
-  @Column({ default: "active" })
-  monthlyStatus!: string;
+  @Column("json", { nullable: true })
+  includedFeatures!: { name: string; isEnabled?: boolean }[];
 
-  @Column({ default: "active" })
-  annualStatus!: string;
+  @Column("json", { nullable: true })
+  integrations!: { name: string; isEnabled?: boolean }[];
 
-  @Column("simple-array", { default: [] })
-  includedFeatures!: string[];
+  @Column("json", { nullable: true })
+  communicationTools!: { name: string; isEnabled?: boolean }[];
 
-  @Column({ default: false })
-  isDefault!: boolean;
+  @Column("json", { nullable: true })
+  cloudStorage!: { name: string; isEnabled?: boolean }[];
+
+  @Column("json", { nullable: true })
+  socialMediaConnectors!: { name: string; isEnabled?: boolean }[];
 
   @Column({ default: false })
   isDelete!: boolean;

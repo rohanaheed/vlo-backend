@@ -16,7 +16,7 @@ export class User {
   @Column({ default: "" })
   password!: string;
   
-  @Column({ type: "enum", enum: ["user", "super_admin"], default: "user" })
+  @Column({ type: "enum", enum: ["user", "super_admin", "customer"], default: "user" })
   role!: UserRole;
 
   @Column({ nullable: true, type: "varchar", default: null })
@@ -24,6 +24,9 @@ export class User {
 
   @Column({ nullable: true, type: "datetime", default: null })
   otpExpiry!: Date | null;
+
+  @Column({default: false})
+  isVarified!: boolean
 
   @Column({ default: false })
   isDelete!: boolean;

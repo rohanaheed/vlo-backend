@@ -28,6 +28,8 @@ import { Ticket } from "../entity/Ticket"
 import { Task } from "../entity/Task"
 import { Subtask } from "../entity/Subtask"
 import { HeadsUp } from "../entity/HeadsUp"
+import { Subscription } from "../entity/Subscription"
+
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -66,6 +68,7 @@ export const AppDataSource = new DataSource({
     Ticket,
     Task,
     Subtask,
-    HeadsUp
+    HeadsUp,
+    Subscription
   ]
 });

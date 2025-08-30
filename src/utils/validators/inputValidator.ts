@@ -17,7 +17,6 @@ export const customerSchema = Joi.object({
   lastName: Joi.string().required().max(50),
   businessName: Joi.string().required().max(100),
   tradingName: Joi.string().required().max(100),
-  subscription: Joi.string().required(),
   note: Joi.string().allow('').optional(),
   businessSize: Joi.number().integer().min(1).required(),
   businessEntity: Joi.string().required(),
@@ -44,25 +43,42 @@ export const businessPracticeAreaSchema = Joi.object({
 export const packageSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
   description: Joi.string().min(10).max(500).required(),
-  monthlyPrice: Joi.number().min(0).required(),
-  annualPrice: Joi.number().min(0).required(),
-  billingCycle: Joi.number().integer().min(1).required(),
-  duration: Joi.number().integer().min(1).required(),
-  maxEmployees: Joi.number().integer().min(1).required(),
-  maxClients: Joi.number().integer().min(1).required(),
-  isFree: Joi.boolean().required(),
-  isPrivate: Joi.boolean().required(),
-  isAutoRenewal: Joi.boolean().required(),
-  isActive: Joi.boolean().required(),
-  monthlyStatus: Joi.string().valid('active', 'inactive', 'pending').required(),
-  annualStatus: Joi.string().valid('active', 'inactive', 'pending').required(),
-  isDefault: Joi.boolean().required(),
-  moduleInPackage: Joi.string().required()
+  price: Joi.number().min(0).required(),
+  billingCycle: Joi.string().valid('Monthly', 'Annual').required(),
+  isActive: Joi.boolean().optional().default(true),
+  includedFeatures: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  integrations: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  communicationTools: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  cloudStorage: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  socialMediaConnectors: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional()
 });
 
-export const autoRenewalSchema = Joi.object({
-  isAutoRenewal: Joi.boolean().required()
-});
+
 
 export const subscriptionSchema = Joi.object({
   type: Joi.string().required(),
@@ -91,8 +107,11 @@ export const verifyOTPSchema = Joi.object({
 
 export const resetPasswordSchema = Joi.object({
   email: Joi.string().email().required(),
-  otp: Joi.string().length(6).pattern(/^[0-9]+$/).required(),
   newPassword: Joi.string().min(6).required()
+});
+
+export const verifyUserSchema = Joi.object({
+  email: Joi.number().integer().positive().required()
 });
 
 export const registrationEmailSchema = Joi.object({

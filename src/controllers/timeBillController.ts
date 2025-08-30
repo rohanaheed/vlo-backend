@@ -387,13 +387,13 @@ export const bulkDeleteTimeBills = async (req: Request, res: Response) => {
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Filter by dateOfWork >= this date (default: first day of current month)
+ *         description: "Filter by dateOfWork >= this date (default: first day of current month)"
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Filter by dateOfWork <= this date (default: last day of current month)
+ *         description: "Filter by dateOfWork <= this date (default: last day of current month)"
  *       - in: query
  *         name: status
  *         schema:

@@ -208,6 +208,73 @@ const swaggerOptions = {
             status: { type: 'string' },
           },
         },
+        Package: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            price: { type: 'number' },
+            billingCycle: { 
+              type: 'string',
+              enum: ['Monthly', 'Annual']
+            },
+            isActive: { type: 'boolean' },
+            includedFeatures: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  isEnabled: { type: 'boolean' }
+                }
+              }
+            },
+            integrations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  isEnabled: { type: 'boolean' }
+                }
+              }
+            },
+            communicationTools: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  isEnabled: { type: 'boolean' }
+                }
+              }
+            },
+            cloudStorage: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  isEnabled: { type: 'boolean' }
+                }
+              }
+            },
+            socialMediaConnectors: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  isEnabled: { type: 'boolean' }
+                }
+              }
+            },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
     security: [{ bearerAuth: [] }],
