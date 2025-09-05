@@ -7,6 +7,7 @@ import { Order } from '../entity/Order';
 import { invoiceSchema, updateInvoiceSchema } from '../utils/validators/inputValidator';
 import { Between } from 'typeorm';
 import { uploadFileToS3, removeFileFromS3 } from '../utils/s3Utils';
+import path from 'path';
 
 const invoiceRepo = AppDataSource.getRepository(Invoice);
 const customerRepo = AppDataSource.getRepository(Customer);
@@ -162,10 +163,14 @@ export const createInvoice = async (req: Request, res: Response): Promise<any> =
 
     // Handle invoice file upload to S3 if file is present
     if (reqWithFile.file && reqWithFile.file.buffer && reqWithFile.file.originalname && reqWithFile.file.mimetype) {
+      const ext = path.extname(reqWithFile.file.originalname);
+      const key = `invoices/${Date.now()}_${Math.random().toString(36).substring(2, 10)}${ext}`;
       const s3Url = await uploadFileToS3({
+        bucket: process.env.INVOICE_BUCKET || '',
         buffer: reqWithFile.file.buffer,
         originalname: reqWithFile.file.originalname,
-        mimetype: reqWithFile.file.mimetype
+        mimetype: reqWithFile.file.mimetype,
+        key: key
       });
       invoice.invoiceFile = s3Url;
     } else {
@@ -526,14 +531,18 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
         const urlParts = existingInvoice.invoiceFile.split('.amazonaws.com/');
         if (urlParts.length === 2) {
           const s3Key = urlParts[1];
-          await removeFileFromS3(s3Key);
+          await removeFileFromS3(process.env.INVOICE_BUCKET || '', s3Key);
         }
       }
       // Upload new file
+      const ext = path.extname(reqWithFile.file.originalname);
+      const key = `invoices/${Date.now()}_${Math.random().toString(36).substring(2, 10)}${ext}`;
       const s3Url = await uploadFileToS3({
+        bucket: process.env.INVOICE_BUCKET || '',
         buffer: reqWithFile.file.buffer,
         originalname: reqWithFile.file.originalname,
-        mimetype: reqWithFile.file.mimetype
+        mimetype: reqWithFile.file.mimetype,
+        key: key
       });
       value.invoiceFile = s3Url;
     }
@@ -604,7 +613,7 @@ export const deleteInvoice = async (req: Request, res: Response): Promise<any> =
       const urlParts = invoice.invoiceFile.split('.amazonaws.com/');
       if (urlParts.length === 2) {
         const s3Key = urlParts[1];
-        await removeFileFromS3(s3Key);
+        await removeFileFromS3(process.env.INVOICE_BUCKET || '', s3Key);
       }
     }
     // Soft delete

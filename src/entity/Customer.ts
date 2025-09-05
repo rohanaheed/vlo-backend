@@ -33,9 +33,6 @@ export class Customer {
   tradingName!: string;
 
   @Column({ default: "" })
-  subscription!: string;
-
-  @Column({ default: "" })
   note!: string;
 
   @Column({ default: 0 })

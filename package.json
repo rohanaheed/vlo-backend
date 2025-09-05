@@ -13,8 +13,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/nodemailer": "^6.4.17",
     "@aws-sdk/client-s3": "^3.637.0",
+    "@types/nodemailer": "^6.4.17",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
@@ -22,6 +22,7 @@
     "express": "^5.1.0",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "mysql2": "^3.14.1",
     "nodemailer": "^7.0.3",
     "reflect-metadata": "^0.2.2",

@@ -15,7 +15,7 @@ export class Package {
   @Column({ default: 0 })
   price!: number;
 
-  @Column({ type: "enum", enum: ["Monthly", "Annual"], default: "" })
+  @Column({ type: "enum", enum: ["Monthly", "Annual"], default: "Monthly" })
   billingCycle!: BillingCycle;
 
   @Column({ default: true })

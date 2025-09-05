@@ -13,7 +13,7 @@ export class Subscription {
   @Column({ default: "" })
   description!: string;
 
-  @Column({ type: "enum", enum: ["Free" , "Trial" , "Public Limited Company"], default: "" })
+  @Column({ type: "enum", enum: ["Free" , "Trial" , "Public Limited Company"], default: "Free" })
   type!: SubscriptionType;
 
   @Column({ default: 0 })

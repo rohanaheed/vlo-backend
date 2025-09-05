@@ -20,7 +20,7 @@ import cors from "cors";
 import timeBillRoutes from "./routes/timeBillRoutes";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 app.use(
   cors({
     origin: "http://localhost:3000",
@@ -85,22 +85,35 @@ const swaggerOptions = {
         CustomerInput: {
           type: 'object',
           required: [
-            'firstName', 'lastName', 'businessName', 'businessSize', 'businessEntity', 'businessType', 'phoneNumber', 'email', 'password', 'status'
+            'firstName',
+            'lastName',
+            'businessName',
+            'tradingName',
+            'businessSize',
+            'businessEntity',
+            'businessType',
+            'phoneNumber',
+            'email',
+            'password',
+            'createdByUserId'
           ],
           properties: {
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            businessName: { type: 'string' },
-            tradingName: { type: 'string' },
-            note: { type: 'string' },
-            businessSize: { type: 'string' },
+            firstName: { type: 'string', maxLength: 50 },
+            lastName: { type: 'string', maxLength: 50 },
+            logo: { type: 'string', nullable: true },
+            businessName: { type: 'string', maxLength: 100 },
+            tradingName: { type: 'string', maxLength: 100 },
+            note: { type: 'string', nullable: true },
+            businessSize: { type: 'integer', minimum: 1 },
             businessEntity: { type: 'string' },
             businessType: { type: 'string' },
-            phoneNumber: { type: 'string' },
-            email: { type: 'string' },
-            password: { type: 'string' },
-            status: { type: 'string' },
-            expirayDate: { type: 'string', format: 'date-time' },
+            phoneNumber: { type: 'string', pattern: '^[0-9]{10,15}$' },
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string', minLength: 8 },
+            status: { type: 'string', enum: ['Active', 'Trial', 'License Expired', 'Free'], default: 'Free' },
+            expirayDate: { type: 'string', format: 'date-time', nullable: true },
+            createdByUserId: { type: 'integer', minimum: 1 },
+            isDelete: { type: 'boolean', default: false }
           },
         },
         Invoice: {

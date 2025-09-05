@@ -8,9 +8,12 @@ import bcrypt from 'bcryptjs';
 import { IsNull, Not } from 'typeorm';
 import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/emailUtils';
 import { UserRole } from '../entity/User';
+import { uploadFileToS3 } from '../utils/s3Utils';
+import { Transaction } from '../entity/Transaction';
 
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
+const transactionRepo = AppDataSource.getRepository(Transaction);
 
 /**
  * @swagger
@@ -50,6 +53,34 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
         message: error.details[0].message
       });
     }
+
+    // If logo is provided as a file or base64, upload to S3 and get URL
+    if (value.logo) {
+        // value.logo is a base64 string, so extract mime type and extension
+        const matches = value.logo.match(/^data:(.+);base64,(.*)$/);
+        if (!matches) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid base64 logo format.'
+            });
+        }
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        const ext = mimeType.split('/')[1] ? `.${mimeType.split('/')[1]}` : '';
+        const buffer = Buffer.from(base64Data, 'base64');
+        const key = `customers/${Date.now()}_${Math.random().toString(36).substring(2, 10)}${ext}`;
+        const originalname = `logo${ext}`;
+        const s3LogoUrl = await uploadFileToS3({
+          bucket: process.env.LOGO_BUCKET || '',
+          buffer: buffer,
+          originalname: originalname,
+          mimetype: mimeType,
+          key: key
+        });
+        value.logo = s3LogoUrl;
+    }
+
+    
 
     // Create customer instance
     const customer = new Customer();
@@ -113,7 +144,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
       savedCustomer.email,
       customerName,
       savedCustomer.businessName,
-      savedCustomer.subscription,
+      savedCustomer.subscriptionId.toString(),
       process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
     );
 
@@ -164,24 +195,122 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
  *                   type: integer
  *                 totalSubscriptions:
  *                   type: integer
+ *                 totalTrials:
+ *                   type: integer
  */
 export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
 
-  const totalCustomers = await customerRepo.count();
-  const activeCustomers = await customerRepo.count({ where: { status: "Active" } });
-  const licenseExpiredCustomers = await customerRepo.count({ where: { status: "License Expired" } });
-  const inactiveCustomers = await customerRepo.count({
-    where: [{ status: "Trial" }, { status: "Free" }, { status: "License Expired" }]
-  });
+  // Helper function to group counts by year, handling undefined/null/invalid data
+  const groupByYear = (items: { createdAt?: Date | null }[] = []) => {
+    if (!Array.isArray(items)) return {};
+    return items.reduce((acc: Record<string, number>, item) => {
+      if (!item || !item.createdAt || isNaN(new Date(item.createdAt).getTime())) {
+        return acc;
+      }
+      const year = new Date(item.createdAt).getFullYear();
+      acc[year] = (acc[year] || 0) + 1;
+      return acc;
+    }, {});
+  };
 
-  const totalSubscriptions = await customerRepo.count({ where: { subscriptionId: Not(IsNull()) } });
+  // Fetch all customers for grouping by year
+  const [
+    allCustomers,
+    activeCustomersArr,
+    licenseExpiredCustomersArr,
+    inactiveCustomersArr,
+    totalSubscriptionsArr,
+    totalTrialsArr,
+    netRevenueArr
+  ] = await Promise.all([
+    customerRepo.find({ select: ["createdAt"] }),
+    customerRepo.find({ where: { status: "Active" }, select: ["createdAt"] }),
+    customerRepo.find({ where: { status: "License Expired" }, select: ["createdAt"] }),
+    customerRepo.find({
+      where: [
+        { status: "Trial" },
+        { status: "Free" },
+        { status: "License Expired" }
+      ],
+      select: ["createdAt"]
+    }),
+    customerRepo.find({ where: { subscriptionId: Not(IsNull()) }, select: ["createdAt"] }),
+    customerRepo.find({ where: { status: "Trial" }, select: ["createdAt"] }),
+    Promise.all([
+      // Yearly revenue
+      transactionRepo.query(`
+        SELECT 
+          EXTRACT(YEAR FROM "createdAt") AS year, 
+          COALESCE(SUM(amount), 0) AS "netRevenue"
+        FROM transaction
+        WHERE status = 'completed'
+        GROUP BY year
+        ORDER BY year ASC
+      `),
 
+      // Quarterly revenue
+      transactionRepo.query(`
+        SELECT 
+          EXTRACT(YEAR FROM "createdAt") AS year,
+          EXTRACT(QUARTER FROM "createdAt") AS quarter,
+          COALESCE(SUM(amount), 0) AS "netRevenue"
+        FROM transaction
+        WHERE status = 'completed'
+        GROUP BY year, quarter
+        ORDER BY year ASC, quarter ASC
+      `),
+
+      // Monthly revenue
+        transactionRepo.query(`
+          SELECT 
+            EXTRACT(YEAR FROM "createdAt") AS year,
+            EXTRACT(MONTH FROM "createdAt") AS month,
+            COALESCE(SUM(amount), 0) AS "netRevenue"
+          FROM transaction
+          WHERE status = 'completed'
+          GROUP BY year, month
+          ORDER BY year ASC, month ASC
+        `),
+
+      // Weekly revenue
+      transactionRepo.query(`
+        SELECT 
+        EXTRACT(YEAR FROM "createdAt") AS year,
+        EXTRACT(WEEK FROM "createdAt") AS week,
+        COALESCE(SUM(amount), 0) AS "netRevenue"
+        FROM transaction
+        WHERE status = 'completed'
+        GROUP BY year, week
+        ORDER BY year ASC, week ASC
+      `),
+
+      // Last 24 hours revenue
+      transactionRepo.query(`
+        SELECT 
+          COALESCE(SUM(amount), 0) AS netRevenue
+        FROM transaction
+        WHERE status = 'completed'
+        AND createdAt >= NOW() - INTERVAL 1 DAY
+      `)
+    ])
+  ]);
+
+  const totalCustomersByYear = groupByYear(allCustomers);
+  const activeCustomersByYear = groupByYear(activeCustomersArr);
+  const licenseExpiredCustomersByYear = groupByYear(licenseExpiredCustomersArr);
+  const inactiveCustomersByYear = groupByYear(inactiveCustomersArr);
+  const totalSubscriptionsByYear = groupByYear(totalSubscriptionsArr);
+  const totalTrialsByYear = groupByYear(totalTrialsArr);
+  const netRevenueByYear = groupByYear(netRevenueArr);
+  
   return res.json({
-    totalCustomers,
-    activeCustomers,
-    inactiveCustomers,
-    licenseExpiredCustomers,
-    totalSubscriptions,
+    totalCustomers: totalCustomersByYear, 
+    activeCustomers: activeCustomersByYear,
+    licenseExpiredCustomers: licenseExpiredCustomersByYear,
+    inactiveCustomers: inactiveCustomersByYear,
+    totalSubscriptions: totalSubscriptionsByYear,
+    totalTrials: totalTrialsByYear,
+    netRevenueByYear: netRevenueByYear
   });
 };
 
@@ -236,7 +365,6 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     order: {
       createdAt: "DESC",
     },
-    relations: ["subscriptions"], // if you want to include related subscriptions
   });
 
   return res.json({
@@ -299,7 +427,6 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
     order: {
       createdAt: "DESC",
     },
-    relations: ["subscriptions"],
   });
 
   return res.json({
@@ -315,7 +442,7 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
  * @swagger
  * /api/customers/{id}:
  *   put:
- *     summary: Update a customer
+ *     summary: Update customer's practiceArea
  *     tags: [Customers]
  *     security:
  *       - bearerAuth: []
@@ -331,7 +458,13 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CustomerInput'
+ *             type: object
+ *             required:
+ *               - practiceArea
+ *             properties:
+ *               practiceArea:
+ *                 type: string
+ *                 description: The new practice area for the customer
  *     responses:
  *       201:
  *         description: Customer updated successfully
@@ -440,7 +573,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       lastName: customer.lastName,
       businessName: customer.businessName,
       tradingName: customer.tradingName,
-      subscription: customer.subscription,
+      subscription: customer.subscriptionId,
       note: customer.note,
       businessSize: customer.businessSize,
       businessEntity: customer.businessEntity,
@@ -545,7 +678,7 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
       customer.email,
       customerName,
       customer.businessName,
-      customer.subscription,
+      customer.subscriptionId.toString(),
       loginUrl || process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
     );
 

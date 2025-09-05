@@ -2,14 +2,14 @@ import { Router } from "express";
 import { createCustomer, getCustomerStats, getAllCustomers, updateCustomer, getCustomerById, sendRegistrationEmail, getDeletedCustomers } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { customerSchema, registrationEmailSchema } from "../utils/validators/inputValidator";
+import { customerSchema, registrationEmailSchema, updateCustomerSchema } from "../utils/validators/inputValidator";
 import { validateRequest } from "../middleware/validateRequest";
 
 const router = Router();
 
 router.post("/", authorize(["super_admin"]), validateRequest(customerSchema), asyncHandler(createCustomer));
 
-router.put("/:id", authorize(["super_admin"]), validateRequest(customerSchema), asyncHandler(updateCustomer));
+router.put("/:id", authorize(["super_admin"]), validateRequest(updateCustomerSchema), asyncHandler(updateCustomer));
 
 router.get("/stats", authorize(["super_admin"]), asyncHandler(getCustomerStats));
 

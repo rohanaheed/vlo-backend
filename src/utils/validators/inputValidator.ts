@@ -15,6 +15,7 @@ export const loginSchema = Joi.object({
 export const customerSchema = Joi.object({
   firstName: Joi.string().required().max(50),
   lastName: Joi.string().required().max(50),
+  logo: Joi.string().optional(),
   businessName: Joi.string().required().max(100),
   tradingName: Joi.string().required().max(100),
   note: Joi.string().allow('').optional(),
@@ -25,7 +26,13 @@ export const customerSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(8).required(),
   status: Joi.string().valid('Active', 'Trial', 'License Expired', 'Free').default('Free'),
-  expirayDate: Joi.date().iso().optional()
+  expirayDate: Joi.date().iso().optional(),
+  createdByUserId: Joi.number().integer().positive().required(),
+  isDelete: Joi.boolean().optional().default(false),
+});
+
+export const updateCustomerSchema = Joi.object({
+  practiceArea: Joi.string().required(),
 });
 
 export const businessTypeSchema = Joi.object({
