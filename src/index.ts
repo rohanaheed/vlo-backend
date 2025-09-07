@@ -148,6 +148,10 @@ const swaggerOptions = {
             customerId: { type: 'integer' },
             invoiceId: { type: 'integer' },
             currencyId: { type: 'integer' },
+            description: { type: 'string' },
+            transactionMode: { type: 'string' },
+            referenceNumber: { type: 'string' },
+            bankAccount: { type: 'string' },
             status: { 
               type: 'string',
               enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'partialyPaid', 'disputed', 'reminder', 'resend', 'void', 'viewed', 'unpaid']
