@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { BillingCycle } from "./Package";
 
 @Entity()
 export class PackageModule {
@@ -9,7 +10,7 @@ export class PackageModule {
   name!: string;
 
   @Column("json", { nullable: true })
-  includedFeatures!: { name: string; price?: number }[];
+  includedFeatures!: { name: string; price?: number, isEnabled?: boolean, billingCycle?: BillingCycle }[];
 
   @Column({ default: false })
   isDelete!: boolean;

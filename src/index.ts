@@ -292,6 +292,28 @@ const swaggerOptions = {
             updatedAt: { type: 'string', format: 'date-time' },
           },
         },
+        PackageModule: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            includedFeatures: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  price: { type: 'number', minimum: 0 },
+                  isEnabled: { type: 'boolean' },
+                  billingCycle: { type: 'string', enum: ['Monthly', 'Annual'] }
+                }
+              }
+            },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+      },
       },
     },
     security: [{ bearerAuth: [] }],
@@ -311,13 +333,13 @@ app.use("/api/auth", authRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/stripe", paymentRoutes);
-app.use("/api/packages", packageRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/credit-notes", creditNotesRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/matters", matterRoutes);
 app.use("/api/installments", installmentRoutes);
 app.use("/api/time-bills", timeBillRoutes);
+app.use("/api/packages", packageRoutes);
 
 const PORT = process.env.PORT;
 

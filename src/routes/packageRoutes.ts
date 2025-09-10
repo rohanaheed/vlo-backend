@@ -8,10 +8,15 @@ import {
   getActivePackages,
   getFreePackages,
   getPaidPackages,
-  getPackagesByBillingCycle
+  getPackagesByBillingCycle,
+  createPackageModule,
+  deletePackageModule,
+  getAllPackageModules,
+  getPackageModuleById,
+  updatePackageModule
 } from "../controllers/packageController";
 import { validateRequest } from "../middleware/validateRequest";
-import { packageSchema } from "../utils/validators/inputValidator";
+import { packageSchema, updatePackageSchema, createPackageModuleSchema, updatePackageModuleSchema } from "../utils/validators/inputValidator";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
@@ -35,7 +40,7 @@ router.get("/:id", authorize(["super_admin"]), asyncHandler(getPackageById));
 router.put(
   "/:id",
   authorize(["super_admin"]),
-  validateRequest(packageSchema),
+  validateRequest(updatePackageSchema),
   asyncHandler(updatePackage)
 );
 
@@ -53,5 +58,45 @@ router.get("/paid/list", authorize(["super_admin", "user"]), asyncHandler(getPai
 
 // Get packages by billing cycle
 router.get("/billing-cycle/:cycle", authorize(["super_admin", "user"]), asyncHandler(getPackagesByBillingCycle));
+
+// Package Module Routes
+
+// Create a new package module
+router.post(
+  "/module",
+  authorize(["super_admin"]),
+  validateRequest(createPackageModuleSchema),
+  asyncHandler(createPackageModule)
+);
+
+// Get all package modules
+router.get(
+  "/module",
+  authorize(["super_admin"]),
+  asyncHandler(getAllPackageModules)
+);
+
+// Get a package module by ID
+router.get(
+  "/module/:id",
+  authorize(["super_admin"]),
+  asyncHandler(getPackageModuleById)
+);
+
+// Update a package module
+router.put(
+  "/module/:id",
+  authorize(["super_admin"]),
+  validateRequest(updatePackageModuleSchema),
+  asyncHandler(updatePackageModule)
+);
+
+// Delete a package module
+router.delete(
+  "/module/:id",
+  authorize(["super_admin"]),
+  asyncHandler(deletePackageModule)
+);
+
 
 export default router; 

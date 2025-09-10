@@ -85,7 +85,43 @@ export const packageSchema = Joi.object({
   ).optional()
 });
 
-
+export const updatePackageSchema = Joi.object({
+  name: Joi.string().min(2).max(100).optional(),
+  description: Joi.string().min(10).max(500).optional(),
+  price: Joi.number().min(0).optional(),
+  billingCycle: Joi.string().valid('Monthly', 'Annual').optional(),
+  isActive: Joi.boolean().optional(),
+  includedFeatures: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  integrations: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  communicationTools: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  cloudStorage: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional(),
+  socialMediaConnectors: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      isEnabled: Joi.boolean().optional().default(true)
+    })
+  ).optional()
+});
 
 export const subscriptionSchema = Joi.object({
   type: Joi.string().required(),
@@ -286,3 +322,28 @@ export const updateTimeBillSchema = Joi.object({
   duration: Joi.string().allow(),
   status: Joi.string().allow()
 });
+
+export const createPackageModuleSchema = Joi.object({
+  name: Joi.string().min(2).max(100).required(),
+  includedFeatures: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      price: Joi.number().min(0).required(),
+      isEnabled: Joi.boolean().required(),
+      billingCycle: Joi.string().valid('Monthly', 'Annual').required()
+    })
+  ).required()
+});
+
+export const updatePackageModuleSchema = Joi.object({
+  name: Joi.string().min(2).max(100).optional(),
+  includedFeatures: Joi.array().items(
+    Joi.object({
+      name: Joi.string().optional(),
+      price: Joi.number().min(0).optional(),
+      isEnabled: Joi.boolean().optional(),
+      billingCycle: Joi.string().valid('Monthly', 'Annual').optional()
+    })
+  ).optional()
+});
+

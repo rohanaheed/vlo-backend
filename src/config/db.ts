@@ -29,6 +29,7 @@ import { Task } from "../entity/Task"
 import { Subtask } from "../entity/Subtask"
 import { HeadsUp } from "../entity/HeadsUp"
 import { Subscription } from "../entity/Subscription"
+import { PackageModule } from "../entity/PackageModule"
 
 
 export const AppDataSource = new DataSource({
@@ -38,7 +39,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  synchronize: false,
+  synchronize: true,
   logging: false,
   entities: [
     Business,
@@ -69,6 +70,7 @@ export const AppDataSource = new DataSource({
     Task,
     Subtask,
     HeadsUp,
-    Subscription
+    Subscription,
+    PackageModule
   ]
 });
