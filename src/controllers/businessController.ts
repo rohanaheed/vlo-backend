@@ -9,8 +9,8 @@ const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
 const businessTypeRepo = AppDataSource.getRepository(BusinessType);
 
 /**
- * @openapi
- * /api/business/types:
+ * @swagger
+ * /api/business/type:
  *   post:
  *     summary: Create a new business type
  *     tags: [Business]
@@ -51,8 +51,8 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
 };
 
 /**
- * @openapi
- * /api/business/types:
+ * @swagger
+ * /api/business/type:
  *   get:
  *     summary: Get all business types
  *     tags: [Business]
@@ -74,8 +74,8 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @openapi
- * /api/business/types/{id}:
+ * @swagger
+ * /api/business/type/{id}:
  *   get:
  *     summary: Get business type by ID
  *     tags: [Business]
@@ -110,8 +110,8 @@ export const getBusinessTypeById = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @openapi
- * /api/business/types/{id}:
+ * @swagger
+ * /api/business/type/{id}:
  *   put:
  *     summary: Update business type
  *     tags: [Business]
@@ -163,8 +163,8 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
 };
 
 /**
- * @openapi
- * /api/business/types/{id}:
+ * @swagger
+ * /api/business/type/{id}:
  *   delete:
  *     summary: Soft delete business type
  *     tags: [Business]
@@ -200,8 +200,13 @@ export const deleteBusinessType = async (req: Request, res: Response): Promise<a
 };
 
 /**
- * @openapi
- * /api/business/entities:
+ * Routes for business entity
+ * 
+ * */
+
+/**
+ * @swagger
+ * /api/business/entity:
  *   post:
  *     summary: Create a new business entity
  *     tags: [Business]
@@ -238,8 +243,8 @@ export const createBusinessEntity = async (req: Request, res: Response): Promise
 };
 
 /**
- * @openapi
- * /api/business/entities:
+ * @swagger
+ * /api/business/entity:
  *   get:
  *     summary: Get all business entities
  *     tags: [Business]
@@ -261,8 +266,8 @@ export const getAllBusinessEntities = async (req: Request, res: Response): Promi
 };
 
 /**
- * @openapi
- * /api/business/entities/{id}:
+ * @swagger
+ * /api/business/entity/{id}:
  *   get:
  *     summary: Get business entity by ID
  *     tags: [Business]
@@ -297,8 +302,8 @@ export const getBusinessEntityById = async (req: Request, res: Response): Promis
 };
 
 /**
- * @openapi
- * /api/business/entities/{id}:
+ * @swagger
+ * /api/business/entity/{id}:
  *   put:
  *     summary: Update business entity
  *     tags: [Business]
@@ -348,8 +353,8 @@ export const updateBusinessEntity = async (req: Request, res: Response): Promise
 };
 
 /**
- * @openapi
- * /api/business/entities/{id}:
+ * @swagger
+ * /api/business/entity/{id}:
  *   delete:
  *     summary: Soft delete business entity
  *     tags: [Business]
@@ -393,8 +398,8 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *  */
 
 /**
- * @openapi
- * /api/business/practice-areas:
+ * @swagger
+ * /api/business/area:
  *   post:
  *     summary: Create a new business practice area
  *     tags: [Business]
@@ -431,8 +436,8 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
 };
 
 /**
- * @openapi
- * /api/business/practice-areas:
+ * @swagger
+ * /api/business/area:
  *   get:
  *     summary: Get all business practice areas
  *     tags: [Business]
@@ -454,8 +459,8 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @openapi
- * /api/business/practice-areas/{id}:
+ * @swagger
+ * /api/business/area/{id}:
  *   get:
  *     summary: Get business practice area by ID
  *     tags: [Business]
@@ -486,8 +491,8 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @openapi
- * /api/business/practice-areas/{id}:
+ * @swagger
+ * /api/business/area/{id}:
  *   put:
  *     summary: Update business practice area
  *     tags: [Business]
@@ -535,8 +540,8 @@ export const updatePracticeArea = async (req: Request, res: Response): Promise<a
 };
 
 /**
- * @openapi
- * /api/business/practice-areas/{id}:
+ * @swagger
+ * /api/business/area/{id}:
  *   delete:
  *     summary: Soft delete business practice area
  *     tags: [Business]

@@ -313,7 +313,58 @@ const swaggerOptions = {
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' }
           }
-      },
+        },
+        BusinessEntity: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        BusinessEntityInput: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 255 }
+          }
+        },
+        BusinessType: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        BusinessTypeInput: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 255 }
+          }
+        },
+        BusinessPracticeArea: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        BusinessPracticeAreaInput: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 255 }
+          }
+        },   
       },
     },
     security: [{ bearerAuth: [] }],
