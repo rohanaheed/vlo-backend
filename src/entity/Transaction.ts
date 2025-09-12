@@ -18,7 +18,7 @@ export class Transaction {
   transactionDate!: Date;
 
   @Column()
-  paymentMethod!: string; // e.g., 'card', 'bank_transfer', 'paypal'
+  paymentMethodId!: number; // e.g., 'card', 'bank_transfer', 'paypal'
 
   @Column({ nullable: true })
   reference?: string;

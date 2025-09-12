@@ -11,7 +11,7 @@ import {
   deletePayment,
   setDefaultPayment,
   getDefaultPayment
-} from "../controllers/paymentController";
+} from "../controllers/paymentMethodController";
 import { paymentSchema, updatePaymentSchema } from "../utils/validators/inputValidator";
 
 const router = Router();

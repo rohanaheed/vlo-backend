@@ -18,6 +18,7 @@ import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import cors from "cors";
 import timeBillRoutes from "./routes/timeBillRoutes";
+import subscriptionRoutes from "./routes/subscriptionRoutes";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -391,6 +392,7 @@ app.use("/api/matters", matterRoutes);
 app.use("/api/installments", installmentRoutes);
 app.use("/api/time-bills", timeBillRoutes);
 app.use("/api/packages", packageRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 const PORT = process.env.PORT;
 

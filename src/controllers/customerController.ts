@@ -5,7 +5,6 @@ import { User } from '../entity/User';
 import { customerSchema } from '../utils/validators/inputValidator';
 import { Status } from '../entity/Customer';
 import bcrypt from 'bcryptjs';
-import { IsNull, Not } from 'typeorm';
 import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/emailUtils';
 import { UserRole } from '../entity/User';
 import { uploadFileToS3 } from '../utils/s3Utils';
@@ -144,7 +143,6 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
       savedCustomer.email,
       customerName,
       savedCustomer.businessName,
-      savedCustomer.subscriptionId.toString(),
       process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
     );
 
@@ -219,7 +217,6 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
     activeCustomersArr,
     licenseExpiredCustomersArr,
     inactiveCustomersArr,
-    totalSubscriptionsArr,
     totalTrialsArr,
     netRevenueArr
   ] = await Promise.all([
@@ -234,7 +231,6 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
       ],
       select: ["createdAt"]
     }),
-    customerRepo.find({ where: { subscriptionId: Not(IsNull()) }, select: ["createdAt"] }),
     customerRepo.find({ where: { status: "Trial" }, select: ["createdAt"] }),
     Promise.all([
       // Yearly revenue
@@ -299,7 +295,6 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
   const activeCustomersByYear = groupByYear(activeCustomersArr);
   const licenseExpiredCustomersByYear = groupByYear(licenseExpiredCustomersArr);
   const inactiveCustomersByYear = groupByYear(inactiveCustomersArr);
-  const totalSubscriptionsByYear = groupByYear(totalSubscriptionsArr);
   const totalTrialsByYear = groupByYear(totalTrialsArr);
   const netRevenueByYear = groupByYear(netRevenueArr);
   
@@ -308,7 +303,6 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
     activeCustomers: activeCustomersByYear,
     licenseExpiredCustomers: licenseExpiredCustomersByYear,
     inactiveCustomers: inactiveCustomersByYear,
-    totalSubscriptions: totalSubscriptionsByYear,
     totalTrials: totalTrialsByYear,
     netRevenueByYear: netRevenueByYear
   });
@@ -573,7 +567,6 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       lastName: customer.lastName,
       businessName: customer.businessName,
       tradingName: customer.tradingName,
-      subscription: customer.subscriptionId,
       note: customer.note,
       businessSize: customer.businessSize,
       businessEntity: customer.businessEntity,
@@ -584,7 +577,6 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       practiceArea: customer.practiceArea,
       status: customer.status,
       expiryDate: customer.expiryDate,
-      subscriptionId: customer.subscriptionId,
       isDelete: customer.isDelete,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt
@@ -678,7 +670,6 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
       customer.email,
       customerName,
       customer.businessName,
-      customer.subscriptionId.toString(),
       loginUrl || process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
     );
 

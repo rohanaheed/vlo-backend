@@ -5,6 +5,8 @@ import { PaymentMethod } from "../entity/PaymentMethod";
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || "whsec_...";
 
+
+
 export const handleStripeWebhook = async (req: Request, res: Response): Promise<any> => {
   const sig = req.headers["stripe-signature"] as string;
   let event;

@@ -49,20 +49,43 @@ export const businessPracticeAreaSchema = Joi.object({
 
 export const packageSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
-  description: Joi.string().min(10).max(500).required(),
-  price: Joi.number().min(0).required(),
-  billingCycle: Joi.string().valid('Monthly', 'Annual').required(),
-  isActive: Joi.boolean().optional().default(true),
+  description: Joi.string().min(2).max(500).required(),
+  type: Joi.string().valid("Free", "Trial", "Public Limited Company", "Paid").optional(),
+  seats: Joi.number().integer().min(0).optional(),
+  maxEmployee: Joi.number().integer().min(0).optional(),
+  storageSize: Joi.number().integer().min(0).optional(),
+  storageUnit: Joi.string().optional(),
+  isPrivate: Joi.boolean().optional(),
+  isRecommended: Joi.boolean().optional(),
+  priceMonthly: Joi.number().min(0).optional(),
+  priceYearly: Joi.number().min(0).optional(),
+  discount: Joi.number().min(0).optional(),
+  trialPeriod: Joi.number().min(0).optional(),
+  notificationBeforeDays: Joi.number().min(0).optional(),
+  trialMessage: Joi.string().optional(),
+  status: Joi.number().integer().optional(),
+  billingCycle: Joi.string().valid("Monthly", "Annual").optional(),
+  isActive: Joi.boolean().optional(),
   includedFeatures: Joi.array().items(
     Joi.object({
       name: Joi.string().required(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
     })
   ).optional(),
   integrations: Joi.array().items(
     Joi.object({
       name: Joi.string().required(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
+    })
+  ).optional(),
+  extraAddOn: Joi.array().items(
+    Joi.object({
+      module: Joi.string().required(),
+      feature: Joi.string().optional(),
+      monthlyPrice: Joi.number().min(0).optional(),
+      yearlyPrice: Joi.number().min(0).optional(),
+      discount: Joi.number().min(0).optional(),
+      description: Joi.string().optional()
     })
   ).optional(),
   communicationTools: Joi.array().items(
@@ -88,37 +111,60 @@ export const packageSchema = Joi.object({
 export const updatePackageSchema = Joi.object({
   name: Joi.string().min(2).max(100).optional(),
   description: Joi.string().min(10).max(500).optional(),
-  price: Joi.number().min(0).optional(),
+  type: Joi.string().valid('Free', 'Trial', 'Public Limited Company', 'Paid').optional(),
+  seats: Joi.number().integer().min(0).optional(),
+  maxEmployee: Joi.number().integer().min(0).optional(),
+  storageSize: Joi.number().integer().min(0).optional(),
+  storageUnit: Joi.string().optional(),
+  isPrivate: Joi.boolean().optional(),
+  isRecommended: Joi.boolean().optional(),
+  priceMonthly: Joi.number().min(0).optional(),
+  priceYearly: Joi.number().min(0).optional(),
+  discount: Joi.number().min(0).optional(),
+  trialPeriod: Joi.number().min(0).optional(),
+  trialMessage: Joi.string().optional(),
+  notificationBeforeDays: Joi.number().min(0).optional(),
+  status: Joi.number().integer().optional(),
   billingCycle: Joi.string().valid('Monthly', 'Annual').optional(),
   isActive: Joi.boolean().optional(),
   includedFeatures: Joi.array().items(
     Joi.object({
       name: Joi.string().optional(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
     })
   ).optional(),
   integrations: Joi.array().items(
     Joi.object({
       name: Joi.string().optional(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
     })
   ).optional(),
   communicationTools: Joi.array().items(
     Joi.object({
       name: Joi.string().optional(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
     })
   ).optional(),
   cloudStorage: Joi.array().items(
     Joi.object({
       name: Joi.string().optional(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
     })
   ).optional(),
   socialMediaConnectors: Joi.array().items(
     Joi.object({
       name: Joi.string().optional(),
-      isEnabled: Joi.boolean().optional().default(true)
+      isEnabled: Joi.boolean().optional()
+    })
+  ).optional(),
+  extraAddOn: Joi.array().items(
+    Joi.object({
+      module: Joi.string().optional(),
+      feature: Joi.string().optional(),
+      monthlyPrice: Joi.number().min(0).optional(),
+      yearlyPrice: Joi.number().min(0).optional(),
+      discount: Joi.number().min(0).optional(),
+      description: Joi.string().optional()
     })
   ).optional()
 });
@@ -346,4 +392,18 @@ export const updatePackageModuleSchema = Joi.object({
     })
   ).optional()
 });
+
+
+export const createSubscriptionSchema = Joi.object({
+  packageId: Joi.number().integer().min(1).required(),
+  customerId: Joi.number().integer().min(1).required()
+});
+
+export const updateSubscriptionSchema = Joi.object({
+  packageId: Joi.number().integer().min(1).optional(),
+  customerId: Joi.number().integer().min(1).optional()
+});
+
+
+
 

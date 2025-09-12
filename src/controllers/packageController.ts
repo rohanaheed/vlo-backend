@@ -12,7 +12,8 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  * /api/packages:
  *   post:
  *     summary: Create a new package
- *     tags: [Packages]
+ *     tags:
+ *       - Packages
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -21,6 +22,9 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - name
+ *               - description
  *             properties:
  *               name:
  *                 type: string
@@ -28,16 +32,98 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  *               description:
  *                 type: string
  *                 description: Package description
- *               price:
+ *               type:
+ *                 type: string
+ *                 enum:
+ *                   - Free
+ *                   - Trial
+ *                   - Public Limited Company
+ *                   - Paid
+ *                 description: Package type
+ *               seats:
+ *                 type: integer
+ *                 description: Number of seats
+ *               maxEmployee:
+ *                 type: integer
+ *                 description: Maximum number of employees
+ *               storageSize:
+ *                 type: integer
+ *                 description: Storage size
+ *               storageUnit:
+ *                 type: string
+ *                 description: Storage unit (e.g., GB, MB)
+ *               isPrivate:
+ *                 type: boolean
+ *                 description: Whether the package is private
+ *               isRecommended:
+ *                 type: boolean
+ *                 description: Whether the package is recommended
+ *               priceMonthly:
  *                 type: number
- *                 description: Package price
+ *                 description: Monthly price
+ *               priceYearly:
+ *                 type: number
+ *                 description: Yearly price
+ *               discount:
+ *                 type: number
+ *                 description: Discount amount
+ *               trialPeriod:
+ *                 type: integer
+ *                 description: Trial period in days
+ *               trialMessage:
+ *                 type: string
+ *                 description: Trial message
+ *               notificationBeforeDays:
+ *                 type: integer
+ *                 description: Days before notification
+ *               status:
+ *                 type: integer
+ *                 description: Status code
  *               billingCycle:
  *                 type: string
- *                 enum: [Monthly, Annual]
+ *                 enum:
+ *                   - Monthly
+ *                   - Annual
  *                 description: Billing cycle
  *               isActive:
  *                 type: boolean
  *                 description: Whether the package is active
+ *               integrations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *               cloudStorage:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     isEnabled:
+ *                       type: boolean
+ *               extraAddOn:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     module:
+ *                       type: string
+ *                     feature:
+ *                       type: string
+ *                     monthlyPrice:
+ *                       type: number
+ *                     yearlyPrice:
+ *                       type: number
+ *                     discount:
+ *                       type: number
+ *                     description:
+ *                       type: string
+ *                 description: List of extra add-ons
  *               includedFeatures:
  *                 type: array
  *                 items:
@@ -48,16 +134,6 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  *                     isEnabled:
  *                       type: boolean
  *                 description: List of included features
- *               integrations:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     isEnabled:
- *                       type: boolean
- *                 description: List of integrations
  *               communicationTools:
  *                 type: array
  *                 items:
@@ -68,16 +144,6 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  *                     isEnabled:
  *                       type: boolean
  *                 description: List of communication tools
- *               cloudStorage:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     isEnabled:
- *                       type: boolean
- *                 description: List of cloud storage options
  *               socialMediaConnectors:
  *                 type: array
  *                 items:
@@ -103,14 +169,28 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   const {
     name,
     description,
-    price,
+    type,
+    seats,
+    maxEmployee,
+    storageSize,
+    storageUnit,
+    isPrivate,
+    isRecommended,
+    priceMonthly,
+    priceYearly,
+    discount,
+    trialPeriod,
+    trialMessage,
+    notificationBeforeDays,
+    status,
     billingCycle,
     isActive,
     includedFeatures,
     integrations,
     communicationTools,
     cloudStorage,
-    socialMediaConnectors
+    socialMediaConnectors,
+    extraAddOn
   } = req.body;
 
   // Check if package with same name already exists
@@ -122,7 +202,20 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   const newPackage = packageRepo.create({
     name,
     description,
-    price,
+    type,
+    seats,
+    maxEmployee,
+    storageSize,
+    storageUnit,
+    isPrivate,
+    isRecommended,
+    priceMonthly,
+    priceYearly,
+    discount,
+    trialPeriod,
+    trialMessage,
+    notificationBeforeDays,
+    status,
     billingCycle,
     isActive,
     includedFeatures,
@@ -130,6 +223,7 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
     communicationTools,
     cloudStorage,
     socialMediaConnectors,
+    extraAddOn,
     isDelete: false
   });
 
@@ -235,10 +329,49 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                 minLength: 10
  *                 maxLength: 500
  *                 description: Package description
- *               price:
+ *               type:
+ *                 type: string
+ *                 enum: [Free, Trial, Public Limited Company, Paid]
+ *                 description: Package type
+ *               seats:
+ *                 type: integer
+ *                 description: Number of seats
+ *               maxEmployee:
+ *                 type: integer
+ *                 description: Maximum number of employees
+ *               storageSize:
+ *                 type: integer
+ *                 description: Storage size
+ *               storageUnit:
+ *                 type: string
+ *                 description: Storage unit (e.g., GB, MB)
+ *               isPrivate:
+ *                 type: boolean
+ *                 description: Whether the package is private
+ *               isRecommended:
+ *                 type: boolean
+ *                 description: Whether the package is recommended
+ *               priceMonthly:
  *                 type: number
- *                 minimum: 0
- *                 description: Package price
+ *                 description: Monthly price
+ *               priceYearly:
+ *                 type: number
+ *                 description: Yearly price
+ *               discount:
+ *                 type: number
+ *                 description: Discount amount
+ *               trialPeriod:
+ *                 type: integer
+ *                 description: Trial period in days
+ *               trialMessage:
+ *                 type: string
+ *                 description: Trial message
+ *               notificationBeforeDays:
+ *                 type: integer
+ *                 description: Days before notification
+ *               status:
+ *                 type: integer
+ *                 description: Status code
  *               billingCycle:
  *                 type: string
  *                 enum: [Monthly, Annual]
@@ -253,10 +386,8 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Feature name
  *                     isEnabled:
  *                       type: boolean
- *                       description: Whether the feature is enabled
  *                 description: List of included features
  *               integrations:
  *                 type: array
@@ -265,10 +396,8 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Integration name
  *                     isEnabled:
  *                       type: boolean
- *                       description: Whether the integration is enabled
  *                 description: List of integrations
  *               communicationTools:
  *                 type: array
@@ -277,10 +406,8 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Communication tool name
  *                     isEnabled:
  *                       type: boolean
- *                       description: Whether the tool is enabled
  *                 description: List of communication tools
  *               cloudStorage:
  *                 type: array
@@ -289,10 +416,8 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Cloud storage name
  *                     isEnabled:
  *                       type: boolean
- *                       description: Whether the storage is enabled
  *                 description: List of cloud storage options
  *               socialMediaConnectors:
  *                 type: array
@@ -301,38 +426,31 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Social media connector name
  *                     isEnabled:
  *                       type: boolean
- *                       description: Whether the connector is enabled
  *                 description: List of social media connectors
- *     responses:
- *       200:
- *         description: Package updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Package'
- *       404:
- *         description: Package not found
- *       409:
- *         description: Package with this name already exists
+ *               extraAddOn:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     module:
+ *                       type: string
+ *                     feature:
+ *                       type: string
+ *                     monthlyPrice:
+ *                       type: number
+ *                     yearlyPrice:
+ *                       type: number
+ *                     discount:
+ *                       type: number
+ *                     description:
+ *                       type: string
+ *                 description: List of extra add-ons
  */
 
 export const updatePackage = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const {
-    name,
-    description,
-    price,
-    billingCycle,
-    isActive,
-    includedFeatures,
-    integrations,
-    communicationTools,
-    cloudStorage,
-    socialMediaConnectors
-  } = req.body;
 
   const packageItem = await packageRepo.findOne({
     where: { id: Number(id), isDelete: false }
@@ -343,8 +461,8 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   }
 
   // Check if name is being changed and if it conflicts with existing package
-  if (name && name !== packageItem.name) {
-    const existing = await packageRepo.findOneBy({ name });
+  if (req.body.name && req.body.name !== packageItem.name) {
+    const existing = await packageRepo.findOneBy({ name: req.body.name });
     if (existing) {
       return res.status(409).json({ message: "Package with this name already exists" });
     }
@@ -356,20 +474,34 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
   // Dynamically update only allowed fields for scalability
   const allowedFields: (keyof Package)[] = [
     "name",
+    "type",
     "description",
-    "price",
+    "seats",
+    "maxEmployee",
+    "storageSize",
+    "storageUnit",
+    "isPrivate",
+    "isRecommended",
+    "priceMonthly",
+    "priceYearly",
+    "discount",
+    "trialPeriod",
+    "trialMessage",
+    "notificationBeforeDays",
+    "status",
     "billingCycle",
     "isActive",
     "includedFeatures",
     "integrations",
     "communicationTools",
     "cloudStorage",
-    "socialMediaConnectors"
+    "socialMediaConnectors",
+    "extraAddOn"
   ];
 
   for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      (updateData as any)[field] = req.body[field];
+    if ((req.body as any)[field] !== undefined) {
+      (updateData as any)[field] = (req.body as any)[field];
     }
   }
   
@@ -476,7 +608,7 @@ export const getActivePackages = async (req: Request, res: Response): Promise<an
 // Get free packages (price = 0)
 export const getFreePackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
-    where: { price: 0, isActive: true, isDelete: false },
+    where: { type: "Free", isActive: true, isDelete: false },
     order: { createdAt: "DESC" }
   });
   return res.json(packages);
@@ -503,7 +635,7 @@ export const getFreePackages = async (req: Request, res: Response): Promise<any>
 // Get paid packages (price > 0)
 export const getPaidPackages = async (req: Request, res: Response): Promise<any> => {
   const packages = await packageRepo.find({
-    where: { price: MoreThan(0), isActive: true, isDelete: false },
+    where: { type: "Paid", isActive: true, isDelete: false },
     order: { createdAt: "DESC" }
   });
   return res.json(packages);

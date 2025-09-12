@@ -71,9 +71,6 @@ export class Customer {
   @CreateDateColumn()
   reasonForDeletion!: string;
 
-  @Column({ default: 0 })
-  subscriptionId!: number;
-
   @Column({ default: false })
   isDelete!: boolean;
 
