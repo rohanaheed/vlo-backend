@@ -50,27 +50,67 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
   return res.status(201).json(newType);
 };
 
+
 /**
  * @swagger
  * /api/business/type:
  *   get:
- *     summary: Get all business types
+ *     summary: Get all business types (paginated)
  *     tags: [Business]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page (default 10)
  *     responses:
  *       200:
- *         description: List of business types
+ *         description: List of business types with pagination
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/BusinessType'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/BusinessType'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of business types
+ *                 page:
+ *                   type: integer
+ *                   description: Current page number
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of items per page
  */
 export const getAllBusinessTypes = async (req: Request, res: Response): Promise<any> => {
-  const types = await businessTypeRepo.find();
-  return res.json(types);
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+
+  const [types, total] = await businessTypeRepo.findAndCount({
+    skip,
+    take: limit,
+    order: { id: "ASC" }
+  });
+
+  return res.json({
+    data: types,
+    total,
+    page,
+    limit
+  });
 };
 
 /**
@@ -242,27 +282,67 @@ export const createBusinessEntity = async (req: Request, res: Response): Promise
   return res.status(201).json(entity);
 };
 
+
 /**
  * @swagger
  * /api/business/entity:
  *   get:
- *     summary: Get all business entities
+ *     summary: Get all business entities (paginated)
  *     tags: [Business]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page (default 10)
  *     responses:
  *       200:
- *         description: List of business entities
+ *         description: List of business entities with pagination
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/BusinessEntity'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/BusinessEntity'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of business entities
+ *                 page:
+ *                   type: integer
+ *                   description: Current page number
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of items per page
  */
 export const getAllBusinessEntities = async (req: Request, res: Response): Promise<any> => {
-  const entities = await businessEntityRepo.find();
-  return res.json(entities);
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+
+  const [entities, total] = await businessEntityRepo.findAndCount({
+    skip,
+    take: limit,
+    order: { id: "ASC" }
+  });
+
+  return res.json({
+    data: entities,
+    total,
+    page,
+    limit
+  });
 };
 
 /**
@@ -453,9 +533,66 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
  *               items:
  *                 $ref: '#/components/schemas/BusinessPracticeArea'
  */
+/**
+ * @swagger
+ * /api/business/area:
+ *   get:
+ *     summary: Get all business practice areas (paginated)
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page (default 10)
+ *     responses:
+ *       200:
+ *         description: List of business practice areas with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/BusinessPracticeArea'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of business practice areas
+ *                 page:
+ *                   type: integer
+ *                   description: Current page number
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of items per page
+ */
 export const getAllPracticeAreas = async (req: Request, res: Response): Promise<any> => {
-  const areas = await practiceRepo.find();
-  return res.json(areas);
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+
+  const [areas, total] = await practiceRepo.findAndCount({
+    skip,
+    take: limit,
+    order: { id: "ASC" }
+  });
+
+  return res.json({
+    data: areas,
+    total,
+    page,
+    limit
+  });
 };
 
 /**

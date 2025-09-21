@@ -343,16 +343,18 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
  *                   type: integer
  *                 limit:
  *                   type: integer
+ *                 totalCount:
+ *                   type: integer
  *                 totalPages:
  *                   type: integer
  *                 totalItems:
  *                   type: integer
  */
 export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
-
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
 
+  // Get paginated customers
   const [customers, total] = await customerRepo.findAndCount({
     skip: (page - 1) * limit,
     take: limit,
@@ -361,12 +363,16 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     },
   });
 
+  // Get total count of all customers (not paginated)
+  const totalCount = await customerRepo.count();
+
   return res.json({
     data: customers,
     page,
     limit,
     totalPages: Math.ceil(total / limit),
     totalItems: total,
+    totalCount: totalCount,
   });
 };
 
@@ -405,6 +411,8 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
  *                   type: integer
  *                 limit:
  *                   type: integer
+ *                 totalCount:
+ *                   type: integer
  *                 totalPages:
  *                   type: integer
  *                 totalItems:
@@ -414,6 +422,7 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
 
+  // Get paginated deleted customers
   const [customers, total] = await customerRepo.findAndCount({
     where: { isDelete: true },
     skip: (page - 1) * limit,
@@ -423,12 +432,16 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
     },
   });
 
+  // Get total count of all deleted customers (without pagination)
+  const totalCount = await customerRepo.count({ where: { isDelete: true } });
+
   return res.json({
     data: customers,
     page,
     limit,
     totalPages: Math.ceil(total / limit),
     totalItems: total,
+    totalCount: totalCount,
   });
 };
 

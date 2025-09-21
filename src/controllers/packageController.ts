@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { AppDataSource } from "../config/db";
 import { Package } from "../entity/Package";
 import { PackageModule } from "../entity/PackageModule";
-import { MoreThan } from "typeorm";
 
 const packageRepo = AppDataSource.getRepository(Package);
 const packageModuleRepo = AppDataSource.getRepository(PackageModule);
@@ -239,23 +238,79 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
  *     tags: [Packages]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
  *     responses:
  *       200:
  *         description: List of packages
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Package'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Package'
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *                 totalItems:
+ *                   type: integer
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
  */
 // Get all packages (excluding soft deleted ones)
 export const getAllPackages = async (req: Request, res: Response): Promise<any> => {
-  const packages = await packageRepo.find({
-    where: { isDelete: false },
-    order: { createdAt: "DESC" }
-  });
-  return res.json(packages);
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const [packages, total] = await packageRepo.findAndCount({
+      where: { isDelete: false },
+      order: { createdAt: "DESC" },
+      skip: (page - 1) * limit,
+      take: limit
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return res.json({
+      success: true,
+      data: packages,
+      page,
+      limit,
+      totalPages,
+      totalItems: total
+    });
+  } catch (error) {
+    console.error('Error fetching packages:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
 };
 
 /**

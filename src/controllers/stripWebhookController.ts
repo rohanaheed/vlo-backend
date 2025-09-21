@@ -24,7 +24,7 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
       await savePayment(invoice);
       console.log("Payment succeeded:", invoice);
       break;
-    case "customer.subscription.created":
+    case "invoice.payment_failed":
       const subscription = event.data.object;
       await savePayment(subscription);
       console.log("Subscription created:", subscription);
@@ -53,20 +53,20 @@ const savePayment = async (payment: any) => {
 
 
 
-export const createPaymentIntent = async (req: Request, res: Response): Promise<any> => {
-  const { amount, currency, customerId } = req.body;
+// export const createPaymentIntent = async (req: Request, res: Response): Promise<any> => {
+//   const { amount, currency, customerId } = req.body;
 
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100, // amount in cents
-      currency: currency || "usd",
-      customer: customerId,
-      payment_method_types: ["card"],
-    });
+//   try {
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount: amount * 100, // amount in cents
+//       currency: currency || "usd",
+//       customer: customerId,
+//       payment_method_types: ["card"],
+//     });
 
-    return res.status(200).json({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Failed to create payment intent" });
-  }
-};
+//     return res.status(200).json({ clientSecret: paymentIntent.client_secret });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Failed to create payment intent" });
+//   }
+// };

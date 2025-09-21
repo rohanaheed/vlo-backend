@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { validateRequest } from "../middleware/validateRequest";
-import { handleStripeWebhook, createPaymentIntent } from "../controllers/stripWebhookController";
+import { handleStripeWebhook } from "../controllers/stripWebhookController";
 import {
   createPayment,
   getCustomerPayments,
@@ -17,7 +17,7 @@ import { paymentSchema, updatePaymentSchema } from "../utils/validators/inputVal
 const router = Router();
 // Existing Stripe webhook routes
 router.post("/webhook", authorize(["super_admin"]), asyncHandler(handleStripeWebhook));
-router.post("/intent", authorize(["super_admin"]), asyncHandler(createPaymentIntent));
+// router.post("/intent", authorize(["super_admin"]), asyncHandler(createPaymentIntent));
 
 // Payment method CRUD routes
 router.post("/methods", authorize(["super_admin", "user"]), validateRequest(paymentSchema), asyncHandler(createPayment));

@@ -5,7 +5,7 @@ import { Customer } from '../entity/Customer';
 import { Currency } from '../entity/Currency';
 import { Invoice } from '../entity/Invioce';
 import { creditNoteSchema, updateCreditNoteSchema } from '../utils/validators/inputValidator';
-import { IsNull, Not, Between } from 'typeorm';
+import { Between } from 'typeorm';
 
 const creditNoteRepo = AppDataSource.getRepository(CreditNotes);
 const customerRepo = AppDataSource.getRepository(Customer);
