@@ -83,7 +83,7 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
  *                 data:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/BusinessType'
+ *                     $ref: '#/components/schemas/BusinessTypeInput'
  *                 total:
  *                   type: integer
  *                   description: Total number of business types
@@ -135,7 +135,7 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/BusinessType'
+ *               $ref: '#/components/schemas/BusinessTypeInput'
  *       404:
  *         description: BusinessType not found
  */
@@ -182,7 +182,7 @@ export const getBusinessTypeById = async (req: Request, res: Response): Promise<
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/BusinessType'
+ *               $ref: '#/components/schemas/BusinessTypeInput'
  *       404:
  *         description: BusinessType not found
  */
