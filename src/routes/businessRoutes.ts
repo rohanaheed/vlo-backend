@@ -83,7 +83,7 @@ router.post(
   asyncHandler(createPracticeArea)
 );
 router.get("/area/", authorize(["super_admin"]), asyncHandler(getAllPracticeAreas));
-router.get("/area/:id", authorize(["super_admin"]), asyncHandler(getPracticeAreaById));
+router.get("/area/:id/", authorize(["super_admin"]), asyncHandler(getPracticeAreaById));
 router.put(
   "/area/:id",
   authorize(["super_admin"]),

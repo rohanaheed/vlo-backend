@@ -100,6 +100,7 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
   const skip = (page - 1) * limit;
 
   const [types, total] = await businessTypeRepo.findAndCount({
+    where: { isDelete: false },
     skip,
     take: limit,
     order: { id: "ASC" }
@@ -226,7 +227,7 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
 export const deleteBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const businessType = await businessTypeRepo.findOne({ where: { id: Number(id) } });
+  const businessType = await businessTypeRepo.findOne({ where: { id: Number(id), isDelete: false } });
 
   if (!businessType) {
     return res.status(404).json({ message: "BusinessType not found" });
@@ -332,6 +333,7 @@ export const getAllBusinessEntities = async (req: Request, res: Response): Promi
   const skip = (page - 1) * limit;
 
   const [entities, total] = await businessEntityRepo.findAndCount({
+    where: { isDelete: false },
     skip,
     take: limit,
     order: { id: "ASC" }
@@ -456,7 +458,7 @@ export const updateBusinessEntity = async (req: Request, res: Response): Promise
 export const deleteBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const businessEntity = await businessEntityRepo.findOne({ where: { id: Number(id) } });
+  const businessEntity = await businessEntityRepo.findOne({ where: { id: Number(id), isDelete: false } });
 
   if (!businessEntity) {
     return res.status(404).json({ message: "BusinessEntity not found" });
@@ -515,24 +517,7 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
   return res.status(201).json(area);
 };
 
-/**
- * @swagger
- * /api/business/area:
- *   get:
- *     summary: Get all business practice areas
- *     tags: [Business]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of business practice areas
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/BusinessPracticeArea'
- */
+
 /**
  * @swagger
  * /api/business/area:
@@ -582,6 +567,7 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
   const skip = (page - 1) * limit;
 
   const [areas, total] = await practiceRepo.findAndCount({
+    where: { isDelete: false },
     skip,
     take: limit,
     order: { id: "ASC" }
@@ -621,7 +607,7 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
  *         description: Not found
  */
 export const getPracticeAreaById = async (req: Request, res: Response): Promise<any> => {
-  const area = await practiceRepo.findOneBy({ id: Number(req.params.id) });
+  const area = await practiceRepo.findOneBy({ id: Number(req.params.id), isDelete: false });
   if (!area) return res.status(404).json({ message: "Not found" });
 
   return res.json(area);
@@ -667,7 +653,7 @@ export const updatePracticeArea = async (req: Request, res: Response): Promise<a
   const { id } = req.params;
   const { name } = req.body;
 
-  const area = await practiceRepo.findOneBy({ id: Number(id) });
+  const area = await practiceRepo.findOneBy({ id: Number(id), isDelete: false });
   if (!area) return res.status(404).json({ message: "Not found" });
 
   area.name = name;
@@ -700,7 +686,7 @@ export const updatePracticeArea = async (req: Request, res: Response): Promise<a
 export const deletePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const businessarea = await practiceRepo.findOne({ where: { id: Number(id) } });
+  const businessarea = await practiceRepo.findOne({ where: { id: Number(id), isDelete: false } });
 
   if (!businessarea) {
     return res.status(404).json({ message: "Business practice area not found" });
