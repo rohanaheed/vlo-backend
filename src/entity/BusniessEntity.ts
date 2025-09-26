@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from "typeorm";
 
 
 @Entity()
+@Index("idx_business_types_name_fulltext", ["name"], { fulltext: true })
 export class BusinessEntity {
   @PrimaryGeneratedColumn()
   id!: number;

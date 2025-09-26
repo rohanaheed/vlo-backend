@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { AppDataSource } from "../config/db";
 import { BusinessType } from "../entity/BusinessType";
 import { BusinessEntity } from "../entity/BusniessEntity";
-import {  BusinessPracticeArea } from "../entity/BusinessPracticeArea";
+import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
+import { Not } from 'typeorm'
 
 const businessEntityRepo = AppDataSource.getRepository(BusinessEntity);
 const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
@@ -72,6 +73,18 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
  *           type: integer
  *           default: 10
  *         description: Number of items per page (default 10)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter business types by name (partial match)
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, dsc, desc]
+ *           default: asc
+ *         description: Sort order for results (asc, dsc/desc)
  *     responses:
  *       200:
  *         description: List of business types with pagination
@@ -94,25 +107,81 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
  *                   type: integer
  *                   description: Number of items per page
  */
+// export const getAllBusinessTypes = async (req: Request, res: Response): Promise<any> => {
+//   const page = parseInt(req.query.page as string) || 1;
+//   const limit = parseInt(req.query.limit as string) || 10;
+//   const skip = (page - 1) * limit;
+
+//   // Get order param, default to ASC, allow 'asc' or 'dsc'
+//   let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+//   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+//   // Get search param
+//   const search = (req.query.search as string) || "";
+
+//   // Build where clause
+//   let where: any = { isDelete: false };
+
+
+//   const [types, total] = await businessTypeRepo.findAndCount({
+//     where,
+//     skip,
+//     take: limit,
+//     order: { id: order }
+//   });
+
+//   return res.json({
+//     data: types,
+//     total,
+//     page,
+//     limit
+//   });
+// };
+
 export const getAllBusinessTypes = async (req: Request, res: Response): Promise<any> => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
-  const skip = (page - 1) * limit;
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-  const [types, total] = await businessTypeRepo.findAndCount({
-    where: { isDelete: false },
-    skip,
-    take: limit,
-    order: { id: "ASC" }
-  });
+    const search = (req.query.search as string) || "";
+    const orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+    const order: "ASC" | "DESC" = orderParam === "desc" || orderParam === "dsc" ? "DESC" : "ASC";
 
-  return res.json({
-    data: types,
-    total,
-    page,
-    limit
-  });
+    const qb = businessTypeRepo.createQueryBuilder("bt")
+      .where("bt.isDelete = :isDelete", { isDelete: false });
+    if (search.trim()) {
+      qb.andWhere(
+        "(MATCH(bt.name) AGAINST (:search IN NATURAL LANGUAGE MODE) OR bt.name LIKE :likeSearch)",
+        {
+          search,
+          likeSearch: `%${search}%`,
+        }
+      )
+        .addSelect("MATCH(bt.name) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
+        .orderBy("relevance", "DESC");
+    } else {
+      qb.orderBy("bt.id", order);
+    }
+
+    const [types, total] = await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return res.json({
+      success: true,
+      data: types,
+      total,
+      page,
+      limit
+    });
+  } catch (error) {
+    console.error("Error fetching business types:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
 };
+
 
 /**
  * @swagger
@@ -305,6 +374,18 @@ export const createBusinessEntity = async (req: Request, res: Response): Promise
  *           type: integer
  *           default: 10
  *         description: Number of items per page (default 10)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term to filter business entities by name
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, ASC, DESC]
+ *           default: asc
+ *         description: Order of results by id or relevance (asc or desc)
  *     responses:
  *       200:
  *         description: List of business entities with pagination
@@ -332,12 +413,33 @@ export const getAllBusinessEntities = async (req: Request, res: Response): Promi
   const limit = parseInt(req.query.limit as string) || 10;
   const skip = (page - 1) * limit;
 
-  const [entities, total] = await businessEntityRepo.findAndCount({
-    where: { isDelete: false },
-    skip,
-    take: limit,
-    order: { id: "ASC" }
-  });
+  // Get order param, default ASC
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  // Search param
+  const search = (req.query.search as string) || "";
+
+  const qb = businessEntityRepo.createQueryBuilder("be")
+    .where("be.isDelete = false");
+
+  if (search.trim()) {
+    qb.andWhere(
+      "(MATCH(be.name) AGAINST (:search IN NATURAL LANGUAGE MODE) OR be.name LIKE :likeSearch)",
+      {
+        search,
+        likeSearch: `%${search}%`,
+      }
+    )
+      .addSelect("MATCH(be.name) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
+      .orderBy("relevance", "DESC");
+  } else {
+    qb.orderBy("be.id", order);
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [entities, total] = await qb.getManyAndCount();
 
   return res.json({
     data: entities,
@@ -346,6 +448,7 @@ export const getAllBusinessEntities = async (req: Request, res: Response): Promi
     limit
   });
 };
+
 
 /**
  * @swagger
@@ -539,6 +642,18 @@ export const createPracticeArea = async (req: Request, res: Response): Promise<a
  *           type: integer
  *           default: 10
  *         description: Number of items per page (default 10)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term to filter business practice areas by name
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, ASC, DESC]
+ *           default: asc
+ *         description: Order of results by id or relevance (asc or desc)
  *     responses:
  *       200:
  *         description: List of business practice areas with pagination
@@ -566,12 +681,33 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
   const limit = parseInt(req.query.limit as string) || 10;
   const skip = (page - 1) * limit;
 
-  const [areas, total] = await practiceRepo.findAndCount({
-    where: { isDelete: false },
-    skip,
-    take: limit,
-    order: { id: "ASC" }
-  });
+  // Get order param, default ASC
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  // Search param
+  const search = (req.query.search as string) || "";
+
+  const qb = practiceRepo.createQueryBuilder("pa")
+    .where("pa.isDelete = false");
+
+  if (search.trim()) {
+    qb.andWhere(
+      "(MATCH(pa.name) AGAINST (:search IN NATURAL LANGUAGE MODE) OR pa.name LIKE :likeSearch)",
+      {
+        search,
+        likeSearch: `%${search}%`,
+      }
+    )
+      .addSelect("MATCH(pa.name) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
+      .orderBy("relevance", "DESC");
+  } else {
+    qb.orderBy("pa.id", order);
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [areas, total] = await qb.getManyAndCount();
 
   return res.json({
     data: areas,
@@ -580,6 +716,7 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
     limit
   });
 };
+
 
 /**
  * @swagger
