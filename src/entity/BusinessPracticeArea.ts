@@ -8,6 +8,9 @@ export class BusinessPracticeArea {
   @Column({ default: "" })
   name!: string;
 
+  @Column({ default: "" })
+  code!: string;
+
   @Column({ default: false })
   isDelete!: boolean;
 

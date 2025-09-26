@@ -598,8 +598,11 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *             type: object
  *             required:
  *               - name
+ *               - code
  *             properties:
  *               name:
+ *                 type: string
+ *               code:
  *                 type: string
  *     responses:
  *       201:
@@ -608,14 +611,14 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *         description: Already exists
  */
 export const createPracticeArea = async (req: Request, res: Response): Promise<any> => {
-  const { name } = req.body;
+  const { name, code } = req.body;
 
   const existing = await practiceRepo.findOneBy({ name });
   if (existing) {
     return res.status(409).json({ message: "Already exists" });
   }
 
-  const area = practiceRepo.create({ name, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
+  const area = practiceRepo.create({ name, code, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
   await practiceRepo.save(area);
   return res.status(201).json(area);
 };
@@ -773,8 +776,11 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  *             type: object
  *             required:
  *               - name
+ *               - code
  *             properties:
  *               name:
+ *                 type: string
+ *               code:
  *                 type: string
  *     responses:
  *       200:
@@ -788,12 +794,13 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  */
 export const updatePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { name } = req.body;
+  const { name, code } = req.body;
 
   const area = await practiceRepo.findOneBy({ id: Number(id), isDelete: false });
   if (!area) return res.status(404).json({ message: "Not found" });
 
   area.name = name;
+  area.code = code;
   area.updatedAt = new Date();
   await practiceRepo.save(area);
   return res.json(area);

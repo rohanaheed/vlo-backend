@@ -44,7 +44,8 @@ export const businessEntitySchema = Joi.object({
 });
 
 export const businessPracticeAreaSchema = Joi.object({
-  name: Joi.string().min(2).required()
+  name: Joi.string().min(2).required(),
+  code: Joi.string().min(2).required()
 });
 
 export const packageSchema = Joi.object({
