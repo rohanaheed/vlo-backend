@@ -44,7 +44,7 @@ export const businessEntitySchema = Joi.object({
 });
 
 export const businessPracticeAreaSchema = Joi.object({
-  name: Joi.string().min(2).required(),
+  title: Joi.string().min(2).required(),
   code: Joi.string().min(2).required()
 });
 
@@ -405,6 +405,26 @@ export const updateSubscriptionSchema = Joi.object({
   customerId: Joi.number().integer().min(1).optional()
 });
 
+export const subcategorySchema = Joi.object({
+  title: Joi.string().min(2).max(100).required(),
+  BusinessPracticeAreaId: Joi.number().integer().min(1).required()
+});
+
+export const updateSubcategorySchema = Joi.object({
+  title: Joi.string().min(2).max(100).required(),
+});
+
+export const createCustomFieldGroupSchema = Joi.object({
+  title: Joi.string().min(2).max(100).required(),
+  subcategoryId: Joi.number().integer().min(1).required(),
+  linkedTo: Joi.string().min(2).max(100).required()
+});
+
+export const updateCustomFieldGroupSchema = Joi.object({
+  title: Joi.string().min(2).max(100),
+  subcategoryId: Joi.number().integer().min(1).required(),
+  linkedTo: Joi.string().min(2).max(100)
+});
 
 
 

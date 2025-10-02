@@ -3,11 +3,16 @@ import { AppDataSource } from "../config/db";
 import { BusinessType } from "../entity/BusinessType";
 import { BusinessEntity } from "../entity/BusniessEntity";
 import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
-import { Not } from 'typeorm'
+import { Subcategory } from "../entity/Subcategory";
+import { CustomField } from "../entity/CustomField";
+import { CustomfieldGroup } from "../entity/CustomfieldGroup";
 
 const businessEntityRepo = AppDataSource.getRepository(BusinessEntity);
 const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
 const businessTypeRepo = AppDataSource.getRepository(BusinessType);
+const subcategoryRepo = AppDataSource.getRepository(Subcategory);
+const customFieldRepo = AppDataSource.getRepository(CustomField);
+const customFieldGroupRepo = AppDataSource.getRepository(CustomfieldGroup);
 
 /**
  * @swagger
@@ -597,10 +602,10 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *           schema:
  *             type: object
  *             required:
- *               - name
+ *               - title
  *               - code
  *             properties:
- *               name:
+ *               title:
  *                 type: string
  *               code:
  *                 type: string
@@ -611,14 +616,14 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *         description: Already exists
  */
 export const createPracticeArea = async (req: Request, res: Response): Promise<any> => {
-  const { name, code } = req.body;
+  const { title, code } = req.body;
 
-  const existing = await practiceRepo.findOneBy({ name });
+  const existing = await practiceRepo.findOneBy({ title });
   if (existing) {
     return res.status(409).json({ message: "Already exists" });
   }
 
-  const area = practiceRepo.create({ name, code, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
+  const area = practiceRepo.create({ title, code, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
   await practiceRepo.save(area);
   return res.status(201).json(area);
 };
@@ -692,17 +697,17 @@ export const getAllPracticeAreas = async (req: Request, res: Response): Promise<
   const search = (req.query.search as string) || "";
 
   const qb = practiceRepo.createQueryBuilder("pa")
-    .where("pa.isDelete = false");
+    .where("pa.isDelete = :isDelete", { isDelete: false });
 
   if (search.trim()) {
     qb.andWhere(
-      "(MATCH(pa.name) AGAINST (:search IN NATURAL LANGUAGE MODE) OR pa.name LIKE :likeSearch)",
+      "(MATCH(pa.title) AGAINST (:search IN NATURAL LANGUAGE MODE) OR pa.title LIKE :likeSearch)",
       {
         search,
         likeSearch: `%${search}%`,
       }
     )
-      .addSelect("MATCH(pa.name) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
+      .addSelect("MATCH(pa.title) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
       .orderBy("relevance", "DESC");
   } else {
     qb.orderBy("pa.id", order);
@@ -775,10 +780,10 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  *           schema:
  *             type: object
  *             required:
- *               - name
+ *               - title
  *               - code
  *             properties:
- *               name:
+ *               title:
  *                 type: string
  *               code:
  *                 type: string
@@ -794,12 +799,12 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  */
 export const updatePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { name, code } = req.body;
+  const { title, code } = req.body;
 
   const area = await practiceRepo.findOneBy({ id: Number(id), isDelete: false });
   if (!area) return res.status(404).json({ message: "Not found" });
 
-  area.name = name;
+  area.title = title;
   area.code = code;
   area.updatedAt = new Date();
   await practiceRepo.save(area);
@@ -839,10 +844,908 @@ export const deletePracticeArea = async (req: Request, res: Response): Promise<a
   // Set isDelete to true instead of actually deleting
   businessarea.isDelete = true;
   businessarea.updatedAt = new Date();
-  await businessTypeRepo.save(businessarea);
+  await practiceRepo.save(businessarea);
 
   return res.json({ message: "Business practice area soft deleted successfully" });
 };
 
 
+/**
+ * Routes for subcategories
+ * 
+ *
+ * 
+ * 
+ *  */
 
+
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Subcategory:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         title:
+ *           type: string
+ *         BusinessPracticeAreaId:
+ *           type: integer
+ *         isDelete:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ */
+
+/**
+ * @swagger
+ * /api/business/subcategory:
+ *   post:
+ *     summary: Create a new subcategory
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - BusinessPracticeAreaId
+ *             properties:
+ *               title:
+ *                 type: string
+ *               BusinessPracticeAreaId:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Subcategory created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subcategory'
+ *       409:
+ *         description: Already exists
+ */
+export const createSubcategory = async (req: Request, res: Response): Promise<any> => {
+  const { title, BusinessPracticeAreaId } = req.body;
+
+  // Check for existing subcategory with same title and BusinessPracticeAreaId
+  const existing = await subcategoryRepo.findOneBy({ title, BusinessPracticeAreaId, isDelete: false });
+  if (existing) {
+    return res.status(409).json({ message: "Already exists" });
+  }
+
+  const subcategory = subcategoryRepo.create({
+    title,
+    BusinessPracticeAreaId,
+    isDelete: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  await subcategoryRepo.save(subcategory);
+  return res.status(201).json(subcategory);
+};
+
+/**
+ * @swagger
+ * /api/business/subcategory:
+ *   get:
+ *     summary: Get all subcategories (paginated)
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page (default 10)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term to filter subcategories by title
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, ASC, DESC]
+ *           default: asc
+ *         description: Order of results by id or relevance (asc or desc)
+ *     responses:
+ *       200:
+ *         description: List of subcategories with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Subcategory'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ */
+export const getAllSubcategories = async (req: Request, res: Response): Promise<any> => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  const search = (req.query.search as string) || "";
+
+  const qb = subcategoryRepo.createQueryBuilder("sc")
+    .where("sc.isDelete = :isDelete", { isDelete: false });
+
+  if (search.trim()) {
+    qb.andWhere(
+      "(MATCH(sc.title) AGAINST (:search IN NATURAL LANGUAGE MODE) OR sc.title LIKE :likeSearch)",
+      {
+        search,
+        likeSearch: `%${search}%`,
+      }
+    )
+      .addSelect("MATCH(sc.title) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
+      .orderBy("relevance", "DESC");
+  } else {
+    qb.orderBy("sc.id", order);
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [subcategories, total] = await qb.getManyAndCount();
+
+  return res.json({
+    data: subcategories,
+    total,
+    page,
+    limit
+  });
+};
+
+/**
+ * @swagger
+ * /api/business/subcategory/{id}:
+ *   get:
+ *     summary: Get subcategory by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Subcategory ID
+ *     responses:
+ *       200:
+ *         description: Subcategory found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subcategory'
+ *       404:
+ *         description: Subcategory not found
+ */
+export const getSubcategoryById = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+
+  const subcategory = await subcategoryRepo.findOne({ where: { id: Number(id), isDelete: false } });
+
+  if (!subcategory) {
+    return res.status(404).json({ message: "Subcategory not found" });
+  }
+
+  return res.json(subcategory);
+};
+
+/**
+ * @swagger
+ * /api/business/subcategory/{id}:
+ *   put:
+ *     summary: Update subcategory by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Subcategory ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Subcategory updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subcategory'
+ *       404:
+ *         description: Subcategory not found
+ */
+export const updateSubcategory = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { title } = req.body;
+
+  const subcategory = await subcategoryRepo.findOne({ where: { id: Number(id), isDelete: false } });
+
+  if (!subcategory) {
+    return res.status(404).json({ message: "Subcategory not found" });
+  }
+
+  if (title !== undefined) subcategory.title = title;
+  subcategory.updatedAt = new Date();
+
+  await subcategoryRepo.save(subcategory);
+  return res.json(subcategory);
+};
+
+/**
+ * @swagger
+ * /api/business/subcategory/{id}:
+ *   delete:
+ *     summary: Soft delete subcategory
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Subcategory ID
+ *     responses:
+ *       200:
+ *         description: Subcategory soft deleted successfully
+ *       404:
+ *         description: Subcategory not found
+ */
+export const deleteSubcategory = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+
+  const subcategory = await subcategoryRepo.findOne({ where: { id: Number(id), isDelete: false } });
+
+  if (!subcategory) {
+    return res.status(404).json({ message: "Subcategory not found" });
+  }
+
+  subcategory.isDelete = true;
+  subcategory.updatedAt = new Date();
+  await subcategoryRepo.save(subcategory);
+
+  return res.json({ message: "Subcategory soft deleted successfully" });
+};
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     CustomField:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         title:
+ *           type: string
+ *         type:
+ *           type: string
+ *           enum: [text, number, date, boolean, select]
+ *         options?:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Only for 'select' type
+ *         isDelete:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ */
+
+/**
+ * @swagger
+ * /api/business/customfield:
+ *   post:
+ *     summary: Create a new custom field
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - type
+ *             properties:
+ *               title:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [text, number, date, boolean, select]
+ *               templateKeyword:
+ *                 type: string
+ *               BusinessPracticeAreaId:
+ *                 type: integer
+ *               CustomfieldGroupId:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Custom field created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomField'
+ *       409:
+ *         description: Already exists
+ */
+export const createCustomField = async (req: Request, res: Response): Promise<any> => {
+  const { title, type, templateKeyword, BusinessPracticeAreaId, CustomfieldGroupId } = req.body;
+
+  // Check for existing custom field with same name and not deleted
+  const existing = await customFieldRepo.findOneBy({ title, isDelete: false });
+  if (existing) {
+    return res.status(409).json({ message: "Already exists" });
+  }
+
+  const customField = customFieldRepo.create({
+    title,
+    type,
+    templateKeyword: templateKeyword,
+    BusinessPracticeAreaId: BusinessPracticeAreaId,
+    CustomfieldGroupId: CustomfieldGroupId,
+    isDelete: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  await customFieldRepo.save(customField);
+  return res.status(201).json(customField);
+};
+
+
+/**
+ * @swagger
+ * /api/business/customfield:
+ *   get:
+ *     summary: Get all custom fields (paginated, searchable, orderable)
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term for title or templateKeyword
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *         description: Order of results by createdAt (ASC or DESC)
+ *     responses:
+ *       200:
+ *         description: List of custom fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/CustomField'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ */
+export const getAllCustomFields = async (req: Request, res: Response): Promise<any> => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 20;
+  const search = (req.query.search as string) || "";
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  const qb = customFieldRepo.createQueryBuilder("customField")
+    .where("customField.isDelete = :isDelete", { isDelete: false });
+
+  if (search) {
+    qb.andWhere(
+      "(customField.title LIKE :search OR customField.templateKeyword LIKE :search)",
+      { search: `%${search}%` }
+    );
+  }
+
+  qb.orderBy("customField.createdAt", order)
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return res.json({ data, total, page, limit });
+};
+
+/**
+ * @swagger
+ * /api/business/customfield/{id}:
+ *   get:
+ *     summary: Get a custom field by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomField ID
+ *     responses:
+ *       200:
+ *         description: Custom field found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomField'
+ *       404:
+ *         description: Custom field not found
+ */
+export const getCustomFieldById = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const customField = await customFieldRepo.findOne({ where: { id: Number(id), isDelete: false } });
+  if (!customField) {
+    return res.status(404).json({ message: "Custom field not found" });
+  }
+  return res.json(customField);
+};
+
+/**
+ * @swagger
+ * /api/business/customfield/{id}:
+ *   put:
+ *     summary: Update a custom field
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomField ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [text, number, date, boolean, select]
+ *               templateKeyword:
+ *                 type: string
+ *                 description: Only for 'select' type
+ *     responses:
+ *       200:
+ *         description: Custom field updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomField'
+ *       404:
+ *         description: Custom field not found
+ */
+export const updateCustomField = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { title, type, templateKeyword } = req.body;
+
+  const customField = await customFieldRepo.findOne({ where: { id: Number(id), isDelete: false } });
+  if (!customField) {
+    return res.status(404).json({ message: "Custom field not found" });
+  }
+
+  if (title !== undefined) customField.title = title;
+  if (type !== undefined) customField.type = type;
+  if (templateKeyword !== undefined) customField.templateKeyword = templateKeyword;
+
+  customField.updatedAt = new Date();
+  await customFieldRepo.save(customField);
+  return res.json(customField);
+};
+
+/**
+ * @swagger
+ * /api/business/customfield/{id}:
+ *   delete:
+ *     summary: Soft delete custom field
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomField ID
+ *     responses:
+ *       200:
+ *         description: Custom field soft deleted successfully
+ *       404:
+ *         description: Custom field not found
+ */
+export const deleteCustomField = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+
+  const customField = await customFieldRepo.findOne({ where: { id: Number(id), isDelete: false } });
+
+  if (!customField) {
+    return res.status(404).json({ message: "Custom field not found" });
+  }
+
+  customField.isDelete = true;
+  customField.updatedAt = new Date();
+  await customFieldRepo.save(customField);
+
+  return res.json({ message: "Custom field soft deleted successfully" });
+};
+
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     CustomFieldGroup:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         title:
+ *           type: string
+ *         subcategoryId:
+ *           type: integer
+ *         linkedTo:
+ *           type: string
+ *         isDelete:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ */
+
+
+/**
+ * @swagger
+ * /api/business/customfieldgroup:
+ *   post:
+ *     summary: Create a new custom field group
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - SubcategoryId
+ *               - linkedTo
+ *             properties:
+ *               title:
+ *                 type: string
+ *               subcategoryId:
+ *                 type: integer
+ *               linkedTo:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Custom field group created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomFieldGroup'
+ *             example:
+ *               id: 1
+ *               title: "Group A"
+ *               subcategoryId: 2
+ *               linkedTo: "Product"
+ *               isDelete: false
+ *               createdAt: "2024-06-01T12:00:00.000Z"
+ *               updatedAt: "2024-06-01T12:00:00.000Z"
+ *       409:
+ *         description: Already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "CustomFieldGroup already exists"
+ */
+export const createCustomFieldGroup = async (req: Request, res: Response): Promise<any> => {
+  const { title, subcategoryId, linkedTo } = req.body;
+
+  const existing = await customFieldGroupRepo.findOneBy({ title, subcategoryId, linkedTo, isDelete: false });
+  if (existing) {
+    return res.status(409).json({ message: "CustomFieldGroup already exists" });
+  }
+
+  const group = customFieldGroupRepo.create({
+    title,
+    subcategoryId,
+    linkedTo,
+    isDelete: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  await customFieldGroupRepo.save(group);
+  return res.status(201).json(group);
+};
+
+
+/**
+ * @swagger
+ * /api/business/customfieldgroup:
+ *   get:
+ *     summary: Get all custom field groups (paginated, searchable, orderable)
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Number of items per page (default 20)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term for title or linkedTo
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, ASC, DESC]
+ *           default: asc
+ *         description: Order of results by createdAt (asc or desc)
+ *     responses:
+ *       200:
+ *         description: List of custom field groups
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/CustomFieldGroup'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ */
+export const getAllCustomFieldGroups = async (req: Request, res: Response): Promise<any> => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 20;
+  const search = (req.query.search as string) || "";
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  const qb = customFieldGroupRepo.createQueryBuilder("group")
+    .where("group.isDelete = :isDelete", { isDelete: false });
+
+  if (search) {
+    qb.andWhere(
+      "(group.title LIKE :search OR group.linkedTo LIKE :search)",
+      { search: `%${search}%` }
+    );
+  }
+
+  qb.orderBy("group.createdAt", order)
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return res.json({ data, total, page, limit });
+};
+
+/**
+ * @swagger
+ * /api/business/customfieldgroup/{id}:
+ *   get:
+ *     summary: Get a custom field group by ID
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomFieldGroup ID
+ *     responses:
+ *       200:
+ *         description: Custom field group found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomFieldGroup'
+ *       404:
+ *         description: CustomFieldGroup not found
+ */
+export const getCustomFieldGroupById = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const group = await customFieldGroupRepo.findOneBy({ id: Number(id), isDelete: false });
+
+  if (!group) {
+    return res.status(404).json({ message: "CustomFieldGroup not found" });
+  }
+
+  return res.json(group);
+};
+
+/**
+ * @swagger
+ * /api/business/customfieldgroup/{id}:
+ *   put:
+ *     summary: Update custom field group
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomFieldGroup ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               linkedTo:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Custom field group updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CustomFieldGroup'
+ *       404:
+ *         description: CustomFieldGroup not found
+ */
+export const updateCustomFieldGroup = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { title, linkedTo } = req.body;
+
+  const group = await customFieldGroupRepo.findOneBy({ id: Number(id), isDelete: false });
+  if (!group) {
+    return res.status(404).json({ message: "CustomFieldGroup not found" });
+  }
+
+  if (title !== undefined) group.title = title;
+  if (linkedTo !== undefined) group.linkedTo = linkedTo;
+  group.updatedAt = new Date();
+  await customFieldGroupRepo.save(group);
+
+  return res.json(group);
+};
+
+/**
+ * @swagger
+ * /api/business/customfieldgroup/{id}:
+ *   delete:
+ *     summary: Soft delete custom field group
+ *     tags: [Business]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: CustomFieldGroup ID
+ *     responses:
+ *       200:
+ *         description: Custom field group soft deleted successfully
+ *       404:
+ *         description: CustomFieldGroup not found
+ */
+export const deleteCustomFieldGroup = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+
+  const group = await customFieldGroupRepo.findOneBy({ id: Number(id), isDelete: false });
+  if (!group) {
+    return res.status(404).json({ message: "CustomFieldGroup not found" });
+  }
+
+  group.isDelete = true;
+  group.updatedAt = new Date();
+  await customFieldGroupRepo.save(group);
+
+  return res.json({ message: "Custom field group soft deleted successfully" });
+};

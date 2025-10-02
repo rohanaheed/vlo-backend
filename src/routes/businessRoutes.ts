@@ -14,10 +14,28 @@ import {
   getAllPracticeAreas,
   getPracticeAreaById,
   updatePracticeArea,
-  deletePracticeArea
+  deletePracticeArea,
+  createSubcategory,
+  deleteSubcategory,
+  updateSubcategory,
+  getSubcategoryById,
+  getAllSubcategories,
+  createCustomFieldGroup,
+  deleteCustomFieldGroup,
+  updateCustomFieldGroup,
+  getCustomFieldGroupById,
+  getAllCustomFieldGroups
 } from "../controllers/businessController";
 import { validateRequest } from "../middleware/validateRequest";
-import { businessTypeSchema, businessEntitySchema, businessPracticeAreaSchema } from "../utils/validators/inputValidator";
+import {
+  businessTypeSchema,
+  businessEntitySchema,
+  businessPracticeAreaSchema,
+  subcategorySchema,
+  updateSubcategorySchema,
+  updateCustomFieldGroupSchema,
+  createCustomFieldGroupSchema
+} from "../utils/validators/inputValidator";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
@@ -96,5 +114,47 @@ router.delete(
   asyncHandler(deletePracticeArea)
 );
 
+
+
+/**
+ * Routes for subcategories
+ * 
+ * */
+router.post(
+  "/subcategory/",
+  authorize(["super_admin"]),
+  validateRequest(subcategorySchema),
+  asyncHandler(createSubcategory)
+);
+router.get("/subcategory/", authorize(["super_admin"]), asyncHandler(getAllSubcategories));
+router.get("/subcategory/:id", authorize(["super_admin"]), asyncHandler(getSubcategoryById));
+router.put(
+  "/subcategory/:id",
+  authorize(["super_admin"]),
+  validateRequest(updateSubcategorySchema),
+  asyncHandler(updateSubcategory)
+);
+router.delete(
+  "/subcategory/:id",
+  authorize(["super_admin"]),
+  asyncHandler(deleteSubcategory)
+);
+
+
+/**
+ * Routes for custom field groups
+ * 
+ * */
+
+router.post(
+  "/customfieldgroup/",
+  authorize(["super_admin"]),
+  validateRequest(createCustomFieldGroupSchema),
+  asyncHandler(createCustomFieldGroup)
+);
+router.get("/customfieldgroup/", authorize(["super_admin"]), asyncHandler(getAllCustomFieldGroups));
+router.get("/customfieldgroup/:id", authorize(["super_admin"]), asyncHandler(getCustomFieldGroupById));
+router.put("/customfieldgroup/:id", authorize(["super_admin"]), validateRequest(updateCustomFieldGroupSchema), asyncHandler(updateCustomFieldGroup));
+router.delete("/customfieldgroup/:id", authorize(["super_admin"]), asyncHandler(deleteCustomFieldGroup));
 
 export default router;

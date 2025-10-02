@@ -30,6 +30,9 @@ import { Subtask } from "../entity/Subtask"
 import { HeadsUp } from "../entity/HeadsUp"
 import { Subscription } from "../entity/Subscription"
 import { PackageModule } from "../entity/PackageModule"
+import { Subcategory } from "../entity/Subcategory"
+import { CustomfieldGroup } from "../entity/CustomfieldGroup"
+import { CustomField } from "../entity/CustomField"
 
 
 export const AppDataSource = new DataSource({
@@ -71,6 +74,9 @@ export const AppDataSource = new DataSource({
     Subtask,
     HeadsUp,
     Subscription,
-    PackageModule
+    PackageModule,
+    Subcategory,
+    CustomfieldGroup,
+    CustomField
   ]
 });

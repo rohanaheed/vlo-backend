@@ -353,7 +353,8 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             id: { type: 'integer' },
-            name: { type: 'string' },
+            title: { type: 'string' },
+            code: { type: 'string' },
             isDelete: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' }
@@ -361,9 +362,10 @@ const swaggerOptions = {
         },
         BusinessPracticeAreaInput: {
           type: 'object',
-          required: ['name'],
+          required: ['title'],
           properties: {
-            name: { type: 'string', minLength: 1, maxLength: 255 }
+            title: { type: 'string', minLength: 1, maxLength: 255 },
+            code: { type: 'string', minLength: 1, maxLength: 255 }
           }
         },   
       },
