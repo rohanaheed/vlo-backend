@@ -3,10 +3,15 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
+  Index
 } from "typeorm";
 
 export type Status = "Active" | "Trial" | "License Expired" | "Free";
+
+@Index("idx_customer_stage_fulltext", ["stage"], { fulltext: true })
+@Index("idx_customer_churnRisk_fulltext", ["churnRisk"], { fulltext: true })
+@Index("idx_customer_businessType_fulltext", ["businessType"], { fulltext: true })
 
 
 @Entity()
@@ -50,11 +55,17 @@ export class Customer {
   @Column({ default: "" })
   phoneNumber!: string;
 
-  @Column({ default: "" })
+  @Column({ default: "", unique: true })
   email!: string;
 
   @Column({ default: "" })
   password!: string;
+
+  @Column({ default: "" })
+  stage!: string;
+
+  @Column({ default: "" })
+  churnRisk!: string;
 
   @Column("simple-array", { default: "" })
   practiceArea!: string[];
@@ -64,6 +75,9 @@ export class Customer {
 
   @CreateDateColumn()
   expiryDate!: Date;
+
+  @CreateDateColumn()
+  lastActive!: Date;
 
   @CreateDateColumn()
   deletedAt!: Date;

@@ -9,10 +9,15 @@ import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/em
 import { UserRole } from '../entity/User';
 import { uploadFileToS3 } from '../utils/s3Utils';
 import { Transaction } from '../entity/Transaction';
+import { Subscription } from '../entity/Subscription';
+import { Package } from '../entity/Package';
 
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
+
+const subscriptionRepo = AppDataSource.getRepository(Subscription);
+const packageRepo = AppDataSource.getRepository(Package);
 
 /**
  * @swagger
@@ -87,6 +92,8 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.logo = value.logo || '';
     customer.firstName = value.firstName;
     customer.lastName = value.lastName;
+    customer.stage = value.stage;
+    customer.churnRisk = value.churnRisk;
     customer.businessName = value.businessName;
     customer.tradingName = value.tradingName;
     customer.note = value.note || '';
@@ -103,6 +110,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     customer.isDelete = false;
     customer.createdAt = new Date();
     customer.updatedAt = new Date();
+    customer.lastActive = new Date();
 
     const savedCustomer = await customerRepo.save(customer);
     // Save the customer
@@ -159,7 +167,6 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     });
 
   } catch (error) {
-    console.error('Error creating customer:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -175,6 +182,22 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
  *     tags: [Customers]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *         description: Filter by customer status
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ *         description: Filter by year
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: integer
+ *         description: Filter by month
  *     responses:
  *       200:
  *         description: Customer statistics
@@ -196,117 +219,160 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
  *                 totalTrials:
  *                   type: integer
  */
+
 export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { state, year, month } = req.query;
 
-  // Helper function to group counts by year, handling undefined/null/invalid data
-  const groupByYear = (items: { createdAt?: Date | null }[] = []) => {
-    if (!Array.isArray(items)) return {};
-    return items.reduce((acc: Record<string, number>, item) => {
-      if (!item || !item.createdAt || isNaN(new Date(item.createdAt).getTime())) {
+    // ✅ Normalize filters
+    const filters: Record<string, any> = {};
+    if (state && typeof state === "string" && state.trim() !== "") filters.state = state;
+    if (year && !isNaN(Number(year))) filters.year = Number(year);
+    if (month && !isNaN(Number(month))) filters.month = Number(month);
+
+    // ✅ Helper: apply filters to QueryBuilder
+    const applyCustomerFilters = (qb: any, alias: string) => {
+      qb.andWhere(`${alias}.isDelete = :isDelete`, { isDelete: false });
+      if (filters.state) qb.andWhere(`${alias}.status = :state`, { state: filters.state });
+      if (filters.year) qb.andWhere(`YEAR(${alias}.createdAt) = :year`, { year: filters.year });
+      if (filters.month) qb.andWhere(`MONTH(${alias}.createdAt) = :month`, { month: filters.month });
+    };
+
+    // ✅ Helper: group customers by year
+    const groupByYear = (items: { createdAt?: Date | null }[] = []) => {
+      if (!Array.isArray(items)) return {};
+      return items.reduce((acc: Record<string, number>, item) => {
+        if (!item?.createdAt) return acc;
+        const year = new Date(item.createdAt).getFullYear();
+        if (!isNaN(year)) acc[year] = (acc[year] || 0) + 1;
         return acc;
+      }, {});
+    };
+
+    // ✅ Helper: common customer query builder
+    const makeCustomerQuery = (statusCondition?: string | string[]) => {
+      const qb = customerRepo.createQueryBuilder("customer").select(["customer.createdAt"]);
+      applyCustomerFilters(qb, "customer");
+      if (statusCondition) {
+        if (Array.isArray(statusCondition)) {
+          qb.andWhere("customer.status IN (:...statuses)", { statuses: statusCondition });
+        } else {
+          qb.andWhere("customer.status = :status", { status: statusCondition });
+        }
       }
-      const year = new Date(item.createdAt).getFullYear();
-      acc[year] = (acc[year] || 0) + 1;
-      return acc;
-    }, {});
-  };
+      return qb.getMany();
+    };
 
-  // Fetch all customers for grouping by year
-  const [
-    allCustomers,
-    activeCustomersArr,
-    licenseExpiredCustomersArr,
-    inactiveCustomersArr,
-    totalTrialsArr,
-    netRevenueArr
-  ] = await Promise.all([
-    customerRepo.find({ select: ["createdAt"] }),
-    customerRepo.find({ where: { status: "Active" }, select: ["createdAt"] }),
-    customerRepo.find({ where: { status: "License Expired" }, select: ["createdAt"] }),
-    customerRepo.find({
-      where: [
-        { status: "Trial" },
-        { status: "Free" },
-        { status: "License Expired" }
-      ],
-      select: ["createdAt"]
-    }),
-    customerRepo.find({ where: { status: "Trial" }, select: ["createdAt"] }),
-    Promise.all([
-      // Yearly revenue
-      transactionRepo.query(`
-        SELECT 
-          EXTRACT(YEAR FROM "createdAt") AS year, 
-          COALESCE(SUM(amount), 0) AS "netRevenue"
-        FROM transaction
-        WHERE status = 'completed'
-        GROUP BY year
-        ORDER BY year ASC
-      `),
+    // ✅ Fetch all data in parallel for performance
+    const [
+      allCustomers,
+      activeCustomersArr,
+      licenseExpiredCustomersArr,
+      inactiveCustomersArr,
+      totalTrialsArr,
+      revenueStats
+    ] = await Promise.all([
+      makeCustomerQuery(), // all
+      makeCustomerQuery("Active"),
+      makeCustomerQuery("License Expired"),
+      makeCustomerQuery(["Trial", "Free", "License Expired"]),
+      makeCustomerQuery("Trial"),
 
-      // Quarterly revenue
-      transactionRepo.query(`
-        SELECT 
-          EXTRACT(YEAR FROM "createdAt") AS year,
-          EXTRACT(QUARTER FROM "createdAt") AS quarter,
-          COALESCE(SUM(amount), 0) AS "netRevenue"
-        FROM transaction
-        WHERE status = 'completed'
-        GROUP BY year, quarter
-        ORDER BY year ASC, quarter ASC
-      `),
-
-      // Monthly revenue
+      // ✅ Revenue stats (with filters + isDelete)
+      Promise.all([
+        // Yearly
         transactionRepo.query(`
           SELECT 
-            EXTRACT(YEAR FROM "createdAt") AS year,
-            EXTRACT(MONTH FROM "createdAt") AS month,
-            COALESCE(SUM(amount), 0) AS "netRevenue"
+            YEAR(createdAt) AS year, 
+            COALESCE(SUM(amount), 0) AS netRevenue
           FROM transaction
           WHERE status = 'completed'
+          AND isDeleted = false
+          ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
+          ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
+          GROUP BY year
+          ORDER BY year ASC
+        `),
+
+        // Quarterly
+        transactionRepo.query(`
+          SELECT 
+            YEAR(createdAt) AS year,
+            QUARTER(createdAt) AS quarter,
+            COALESCE(SUM(amount), 0) AS netRevenue
+          FROM transaction
+          WHERE status = 'completed'
+          AND isDeleted = false
+          ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
+          ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
+          GROUP BY year, quarter
+          ORDER BY year ASC, quarter ASC
+        `),
+
+        // Monthly
+        transactionRepo.query(`
+          SELECT 
+            YEAR(createdAt) AS year,
+            MONTH(createdAt) AS month,
+            COALESCE(SUM(amount), 0) AS netRevenue
+          FROM transaction
+          WHERE status = 'completed'
+          AND isDeleted = false
+          ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
+          ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
           GROUP BY year, month
           ORDER BY year ASC, month ASC
         `),
 
-      // Weekly revenue
-      transactionRepo.query(`
-        SELECT 
-        EXTRACT(YEAR FROM "createdAt") AS year,
-        EXTRACT(WEEK FROM "createdAt") AS week,
-        COALESCE(SUM(amount), 0) AS "netRevenue"
-        FROM transaction
-        WHERE status = 'completed'
-        GROUP BY year, week
-        ORDER BY year ASC, week ASC
-      `),
+        // Weekly
+        transactionRepo.query(`
+          SELECT 
+            YEAR(createdAt) AS year,
+            WEEK(createdAt) AS week,
+            COALESCE(SUM(amount), 0) AS netRevenue
+          FROM transaction
+          WHERE status = 'completed'
+          AND isDeleted = false
+          ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
+          ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
+          GROUP BY year, week
+          ORDER BY year ASC, week ASC
+        `),
 
-      // Last 24 hours revenue
-      transactionRepo.query(`
-        SELECT 
-          COALESCE(SUM(amount), 0) AS netRevenue
-        FROM transaction
-        WHERE status = 'completed'
-        AND createdAt >= NOW() - INTERVAL 1 DAY
-      `)
-    ])
-  ]);
+        // Last 24 hours
+        transactionRepo.query(`
+          SELECT 
+            COALESCE(SUM(amount), 0) AS netRevenue
+          FROM transaction
+          WHERE status = 'completed'
+          AND isDeleted = false
+          AND createdAt >= NOW() - INTERVAL 1 DAY
+        `)
+      ])
+    ]);
 
-  const totalCustomersByYear = groupByYear(allCustomers);
-  const activeCustomersByYear = groupByYear(activeCustomersArr);
-  const licenseExpiredCustomersByYear = groupByYear(licenseExpiredCustomersArr);
-  const inactiveCustomersByYear = groupByYear(inactiveCustomersArr);
-  const totalTrialsByYear = groupByYear(totalTrialsArr);
-  const netRevenueByYear = groupByYear(netRevenueArr);
-  
-  return res.json({
-    totalCustomers: totalCustomersByYear, 
-    activeCustomers: activeCustomersByYear,
-    licenseExpiredCustomers: licenseExpiredCustomersByYear,
-    inactiveCustomers: inactiveCustomersByYear,
-    totalTrials: totalTrialsByYear,
-    netRevenueByYear: netRevenueByYear
-  });
+    // ✅ Response
+    return res.json({
+      totalCustomers: groupByYear(allCustomers),
+      activeCustomers: groupByYear(activeCustomersArr),
+      licenseExpiredCustomers: groupByYear(licenseExpiredCustomersArr),
+      inactiveCustomers: groupByYear(inactiveCustomersArr),
+      totalTrials: groupByYear(totalTrialsArr),
+      netRevenue: {
+        yearly: revenueStats[0],
+        quarterly: revenueStats[1],
+        monthly: revenueStats[2],
+        weekly: revenueStats[3],
+        last24h: revenueStats[4]?.[0]?.netRevenue || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getCustomerStats:", error);
+    return res.status(500).json({ message: "Error fetching customer stats", error });
+  }
 };
+
+
 
 /**
  * @swagger
@@ -327,6 +393,66 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
  *         schema:
  *           type: integer
  *         description: Number of items per page
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, dsc]
+ *         description: Sort order (asc or desc)
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email (partial match)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter customers created after this date (inclusive)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter customers created before this date (inclusive)
+ *       - in: query
+ *         name: id
+ *         schema:
+ *           type: string
+ *         description: Filter by customer id (partial or exact)
+ *       - in: query
+ *         name: stage
+ *         schema:
+ *           type: string
+ *         description: Filter by customer stage
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filter by customer type
+ *       - in: query
+ *         name: churnRisk
+ *         schema:
+ *           type: string
+ *         description: Filter by churn risk
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by customer status
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter customers created after this date (inclusive)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter customers created before this date (inclusive)
  *     responses:
  *       200:
  *         description: List of customers
@@ -353,21 +479,130 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
 export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
+  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
-  // Get paginated customers
-  const [customers, total] = await customerRepo.findAndCount({
-    skip: (page - 1) * limit,
-    take: limit,
-    order: {
-      createdAt: "DESC",
-    },
+
+
+  const email = (req.query.email as string) || '';
+  const id = req.query.id as string | undefined;
+  const stage = req.query.stage as string | undefined;
+  const type = req.query.type as string | undefined;
+  const churnRisk = req.query.churnRisk as string | undefined;
+  const status = req.query.status as string | undefined;
+  const startDate = req.query.startDate as string | undefined;
+  const endDate = req.query.endDate as string | undefined;
+ 
+
+  // Use QueryBuilder for optimized full text search and filtering
+  let qb = customerRepo.createQueryBuilder("customer")
+    .where("customer.isDelete = :isDelete", { isDelete: false });
+
+  if (email) {
+    qb.andWhere('customer.email LIKE :email', { email: `%${email}%` });
+  }
+  if (id && !isNaN(Number(id))) {
+    qb = qb.andWhere("customer.id = :id", { id: id });
+  }
+  if (stage && stage.trim() !== "") {
+    qb = qb.andWhere("LOWER(customer.stage) LIKE :stageFilter", { stageFilter: `%${stage.toLowerCase()}%` });
+  }
+  if (type && type.trim() !== "") {
+    qb = qb.andWhere("LOWER(customer.businessType) LIKE :typeFilter", { typeFilter: `%${type.toLowerCase()}%` });
+  }
+  if (typeof churnRisk === "string" && churnRisk.trim() !== "") {
+    qb = qb.andWhere("LOWER(customer.churnRisk) LIKE :churnRiskFilter", { churnRiskFilter: `%${churnRisk.toLowerCase()}%` });
+  }
+  if(startDate && endDate) {
+    qb = qb.andWhere("customer.createdAt BETWEEN :startDate AND :endDate", { startDate: new Date(startDate), endDate: new Date(endDate) });
+  }
+  if(startDate) {
+    qb = qb.andWhere("customer.createdAt >= :startDate", { startDate: new Date(startDate) });
+  }
+  if(endDate) {
+    qb = qb.andWhere("customer.createdAt <= :endDate", { endDate: new Date(endDate) });
+  }
+  // if (status) {
+  //   // Status is an enum field, so use exact match instead of LIKE
+  //   qb = qb.andWhere("customer.status = :statusFilter", { statusFilter: status });
+  // }
+
+
+  // Use QueryBuilder for paginated, filtered, and ordered results
+  const [customers, total] = await qb
+    .orderBy("customer.createdAt", order)
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  // Get all subscriptions for these customers in one query
+  const customerIds = customers.map(c => c.id);
+  let subscriptions: any[] = [];
+  if (customerIds.length > 0) {
+    subscriptions = await subscriptionRepo
+      .createQueryBuilder("subscription")
+      .where("subscription.customerId IN (:...customerIds)", { customerIds })
+      .andWhere("subscription.isDelete = :isDelete", { isDelete: false })
+      .getMany();
+  }
+
+  let packages: any[] = [];
+  // Get all packageIds from subscriptions
+  const packageIds = subscriptions.map((s: any) => s.packageId);
+  if (packageIds.length > 0) {
+    packages = await packageRepo
+      .createQueryBuilder("package")
+      .select([
+        "package.id",
+        "package.name",
+        "package.type",
+        "package.priceMonthly",
+        "package.priceYearly",
+      ])
+      .where("package.id IN (:...packageIds)", { packageIds })
+      .getMany()
+      .then(pkgs =>
+        pkgs.map(pkg => ({
+          id: pkg.id,
+          name: pkg.name,
+          type: pkg.type,
+          price: {
+            monthly: pkg.priceMonthly,
+            yearly: pkg.priceYearly,
+          },
+        }))
+      );
+  }
+
+  // Map for quick lookup
+  const subscriptionMap = new Map();
+  subscriptions.forEach((sub: any) => {
+    subscriptionMap.set(sub.customerId, sub);
+  });
+
+  const packageMap = new Map();
+  packages.forEach((pkg: any) => {
+    packageMap.set(pkg.id, pkg);
+  });
+
+  // Attach package details to each customer
+  const customersWithPackage = customers.map(customer => {
+    const subscription = subscriptionMap.get(customer.id);
+    let packageDetails = null;
+    if (subscription) {
+      packageDetails = packageMap.get(subscription.packageId) || null;
+    }
+    return {
+      ...customer,
+      package: packageDetails
+    };
   });
 
   // Get total count of all customers (not paginated)
   const totalCount = await customerRepo.count();
 
   return res.json({
-    data: customers,
+    data: customersWithPackage,
     page,
     limit,
     totalPages: Math.ceil(total / limit),
@@ -376,11 +611,12 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
   });
 };
 
+
 /**
  * @swagger
  * /api/customers/deleted:
  *   get:
- *     summary: Get only deleted customers (paginated)
+ *     summary: Get all deleted customers with pagination and filters
  *     tags: [Customers]
  *     security:
  *       - bearerAuth: []
@@ -395,6 +631,23 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
  *         schema:
  *           type: integer
  *         description: Number of items per page
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by customer email (partial match)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter deleted customers from this date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter deleted customers up to this date (ISO format)
  *     responses:
  *       200:
  *         description: List of deleted customers
@@ -417,32 +670,60 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
  *                   type: integer
  *                 totalItems:
  *                   type: integer
+ *       500:
+ *         description: Internal server error
  */
 export const getDeletedCustomers = async (req: Request, res: Response): Promise<any> => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const email = (req.query.email as string) || '';
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+    let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+    let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
-  // Get paginated deleted customers
-  const [customers, total] = await customerRepo.findAndCount({
-    where: { isDelete: true },
-    skip: (page - 1) * limit,
-    take: limit,
-    order: {
-      createdAt: "DESC",
-    },
-  });
 
-  // Get total count of all deleted customers (without pagination)
-  const totalCount = await customerRepo.count({ where: { isDelete: true } });
+    const query = customerRepo.createQueryBuilder('customer')
+      .where('customer.isDelete = :isDelete', { isDelete: true });
 
-  return res.json({
-    data: customers,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-    totalItems: total,
-    totalCount: totalCount,
-  });
+    if (email) {
+      query.andWhere('customer.email LIKE :email', { email: `%${email}%` });
+    }
+
+    if (startDate) {
+      query.andWhere('customer.deletedAt >= :startDate', { startDate: new Date(startDate) });
+    }
+
+    if (endDate) {
+      query.andWhere('customer.deletedAt <= :endDate', { endDate: new Date(endDate) });
+    }
+
+    // Get total filtered count
+    const [customers, total] = await query
+      .orderBy('customer.deletedAt', order)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    // Get total count of all deleted customers (not paginated, not filtered)
+    const totalCount = await customerRepo.count({ where: { isDelete: true } });
+
+    return res.status(200).json({
+      data: customers,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      totalCount: totalCount,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: err instanceof Error ? err.message : err,
+    });
+  }
 };
 
 /**

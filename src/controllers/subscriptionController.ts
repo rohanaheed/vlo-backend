@@ -109,6 +109,12 @@ export const createSubscription = async (req: Request, res: Response): Promise<a
  *         schema:
  *           type: integer
  *         description: Number of items per page
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc, dsc]
+ *         description: Sort order (asc or desc)
  *     responses:
  *       200:
  *         description: List of subscriptions
@@ -136,12 +142,17 @@ export const getAllSubscriptions = async (req: Request, res: Response): Promise<
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+    // Add support for order (asc or desc) on createdAt column
+    let orderParam = (req.query.order as string)?.toLowerCase() || "desc";
+    let order: "ASC" | "DESC" = orderParam === "asc" ? "ASC" : "DESC";
+
 
     const [subscriptions, total] = await subscriptionRepo.findAndCount({
       where: { isDelete: false },
-      skip: (page - 1) * limit,
+      skip: skip,
       take: limit,
-      order: { createdAt: "DESC" }
+      order: { createdAt: order }
     });
 
     return res.json({

@@ -15,6 +15,8 @@ export const loginSchema = Joi.object({
 export const customerSchema = Joi.object({
   firstName: Joi.string().required().max(50),
   lastName: Joi.string().required().max(50),
+  stage: Joi.string().required().max(50),
+  churnRisk: Joi.string().required().max(50),
   logo: Joi.string().optional(),
   businessName: Joi.string().required().max(100),
   tradingName: Joi.string().required().max(100),
@@ -27,6 +29,7 @@ export const customerSchema = Joi.object({
   password: Joi.string().min(8).required(),
   status: Joi.string().valid('Active', 'Trial', 'License Expired', 'Free').default('Free'),
   expirayDate: Joi.date().iso().optional(),
+  lastActive: Joi.date().iso().optional(),
   createdByUserId: Joi.number().integer().positive().required(),
   isDelete: Joi.boolean().optional().default(false),
 });
@@ -424,6 +427,45 @@ export const updateCustomFieldGroupSchema = Joi.object({
   title: Joi.string().min(2).max(100),
   subcategoryId: Joi.number().integer().min(1).required(),
   linkedTo: Joi.string().min(2).max(100)
+});
+
+// HeadsUp validation schemas
+export const headsUpSchema = Joi.object({
+  name: Joi.string().min(2).max(100).required(),
+  module: Joi.string().min(2).max(50).required(),
+  enabled: Joi.boolean().optional().default(false),
+  rule: Joi.string().min(2).max(500).required(),
+  frequency: Joi.string().valid('daily', 'weekly', 'monthly', 'yearly').required(),
+  timeOfDay: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
+  timeZone: Joi.string().min(2).max(50).required(),
+  status: Joi.string().valid('active', 'inactive').optional().default('active'),
+  nextRunDate: Joi.date().iso().required(),
+  lastRunDate: Joi.date().iso().required(),
+  rowsInEmail: Joi.number().integer().min(0).optional().default(0),
+  contentType: Joi.string().min(2).max(50).optional().default(''),
+  resultsGrouped: Joi.string().min(2).max(100).optional().default(''),
+  isDelete: Joi.boolean().optional().default(false),
+  countOfExpiringSubscriptions: Joi.number().integer().min(0).optional().default(0),
+  avgActivityLevel: Joi.number().integer().min(0).optional().default(0)
+});
+
+export const updateHeadsUpSchema = Joi.object({
+  name: Joi.string().min(2).max(100).optional(),
+  module: Joi.string().min(2).max(50).optional(),
+  enabled: Joi.boolean().optional(),
+  rule: Joi.string().min(2).max(500).optional(),
+  frequency: Joi.string().valid('daily', 'weekly', 'monthly', 'yearly').optional(),
+  timeOfDay: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+  timeZone: Joi.string().min(2).max(50).optional(),
+  status: Joi.string().valid('active', 'inactive').optional(),
+  nextRunDate: Joi.date().iso().optional(),
+  lastRunDate: Joi.date().iso().optional(),
+  rowsInEmail: Joi.number().integer().min(0).optional(),
+  contentType: Joi.string().min(2).max(50).optional(),
+  resultsGrouped: Joi.string().min(2).max(100).optional(),
+  isDelete: Joi.boolean().optional(),
+  countOfExpiringSubscriptions: Joi.number().integer().min(0).optional(),
+  avgActivityLevel: Joi.number().integer().min(0).optional()
 });
 
 

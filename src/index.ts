@@ -19,6 +19,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 import cors from "cors";
 import timeBillRoutes from "./routes/timeBillRoutes";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
+import headsUpRoutes from "./routes/headsUpRoutes";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -88,6 +89,8 @@ const swaggerOptions = {
           required: [
             'firstName',
             'lastName',
+            'stage',
+            'churnrisk',
             'businessName',
             'tradingName',
             'businessSize',
@@ -101,6 +104,8 @@ const swaggerOptions = {
           properties: {
             firstName: { type: 'string', maxLength: 50 },
             lastName: { type: 'string', maxLength: 50 },
+            stage: { type: 'string', maxLength: 50 },
+            churnRisk: { type: 'string', maxLength: 50 },
             logo: { type: 'string', nullable: true },
             businessName: { type: 'string', maxLength: 100 },
             tradingName: { type: 'string', maxLength: 100 },
@@ -367,7 +372,176 @@ const swaggerOptions = {
             title: { type: 'string', minLength: 1, maxLength: 255 },
             code: { type: 'string', minLength: 1, maxLength: 255 }
           }
-        },   
+        },
+        HeadsUp: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string', maxLength: 100 },
+            module: { type: 'string', maxLength: 50 },
+            enabled: { type: 'boolean' },
+            rule: { type: 'string', maxLength: 500 },
+            frequency: { 
+              type: 'string',
+              enum: ['daily', 'weekly', 'monthly', 'yearly']
+            },
+            timeOfDay: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+            timeZone: { type: 'string', maxLength: 50 },
+            status: { 
+              type: 'string',
+              enum: ['active', 'inactive']
+            },
+            nextRunDate: { type: 'string', format: 'date-time' },
+            lastRunDate: { type: 'string', format: 'date-time' },
+            rowsInEmail: { type: 'integer', minimum: 0 },
+            contentType: { type: 'string', maxLength: 50 },
+            resultsGrouped: { type: 'string', maxLength: 100 },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        HeadsUpInput: {
+          type: 'object',
+          required: ['name', 'module', 'rule', 'frequency', 'timeOfDay', 'timeZone', 'nextRunDate', 'lastRunDate'],
+          properties: {
+            name: { type: 'string', minLength: 2, maxLength: 100 },
+            module: { type: 'string', minLength: 2, maxLength: 50 },
+            enabled: { type: 'boolean', default: false },
+            rule: { type: 'string', minLength: 2, maxLength: 500 },
+            frequency: { 
+              type: 'string',
+              enum: ['daily', 'weekly', 'monthly', 'yearly']
+            },
+            timeOfDay: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+            timeZone: { type: 'string', minLength: 2, maxLength: 50 },
+            status: { 
+              type: 'string',
+              enum: ['active', 'inactive'],
+              default: 'active'
+            },
+            nextRunDate: { type: 'string', format: 'date-time' },
+            lastRunDate: { type: 'string', format: 'date-time' },
+            rowsInEmail: { type: 'integer', minimum: 0, default: 0 },
+            contentType: { type: 'string', minLength: 2, maxLength: 50, default: '' },
+            resultsGrouped: { type: 'string', minLength: 2, maxLength: 100, default: '' },
+            isDelete: { type: 'boolean', default: false },
+            countOfExpiringSubscriptions: { type: 'integer', minimum: 0, default: 0 },
+            avgActivityLevel: { type: 'integer', minimum: 0, default: 0 }
+          }
+        },
+        HeadsUpUpdateInput: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 2, maxLength: 100 },
+            module: { type: 'string', minLength: 2, maxLength: 50 },
+            enabled: { type: 'boolean' },
+            rule: { type: 'string', minLength: 2, maxLength: 500 },
+            frequency: { 
+              type: 'string',
+              enum: ['daily', 'weekly', 'monthly', 'yearly']
+            },
+            timeOfDay: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+            timeZone: { type: 'string', minLength: 2, maxLength: 50 },
+            status: { 
+              type: 'string',
+              enum: ['active', 'inactive']
+            },
+            nextRunDate: { type: 'string', format: 'date-time' },
+            lastRunDate: { type: 'string', format: 'date-time' },
+            rowsInEmail: { type: 'integer', minimum: 0 },
+            contentType: { type: 'string', minLength: 2, maxLength: 50 },
+            resultsGrouped: { type: 'string', minLength: 2, maxLength: 100 },
+            isDelete: { type: 'boolean' },
+            countOfExpiringSubscriptions: { type: 'integer', minimum: 0 },
+            avgActivityLevel: { type: 'integer', minimum: 0 }
+          }
+        },
+        Error: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string' },
+            errors: {
+              type: 'array',
+              items: { type: 'string' }
+            }
+          }
+        },
+        BadRequestError: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Bad Request' },
+            errors: {
+              type: 'array',
+              items: { type: 'string' }
+            }
+          }
+        },
+        UnauthorizedError: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Unauthorized' }
+          }
+        },
+        NotFoundError: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Not Found' }
+          }
+        },
+        InternalServerError: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Internal Server Error' }
+          }
+        }
+      },
+      responses: {
+        BadRequestError: {
+          description: 'Bad Request',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/BadRequestError'
+              }
+            }
+          }
+        },
+        UnauthorizedError: {
+          description: 'Unauthorized',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/UnauthorizedError'
+              }
+            }
+          }
+        },
+        NotFoundError: {
+          description: 'Not Found',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/NotFoundError'
+              }
+            }
+          }
+        },
+        InternalServerError: {
+          description: 'Internal Server Error',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/InternalServerError'
+              }
+            }
+          }
+        }
       },
     },
     security: [{ bearerAuth: [] }],
@@ -395,6 +569,7 @@ app.use("/api/installments", installmentRoutes);
 app.use("/api/time-bills", timeBillRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/heads-up", headsUpRoutes);
 
 const PORT = process.env.PORT;
 

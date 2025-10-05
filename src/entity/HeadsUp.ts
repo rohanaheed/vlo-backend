@@ -40,6 +40,12 @@ export class HeadsUp {
   @Column({ default: "" })
   contentType!: string;
 
+  @Column({ default: 0 })
+  countOfExpiringSubscriptions!: number;
+
+  @Column({ default: 0 })
+  avgActivityLevel!: number;
+
   @Column({ default: "" })
   resultsGrouped!: string;
 
