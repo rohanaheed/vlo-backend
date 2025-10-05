@@ -485,7 +485,7 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
 
 
   const email = (req.query.email as string) || '';
-  const id = req.query.id as string | undefined;
+  const id = req.query.id as number | undefined;
   const stage = req.query.stage as string | undefined;
   const type = req.query.type as string | undefined;
   const churnRisk = req.query.churnRisk as string | undefined;
@@ -501,8 +501,11 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
   if (email) {
     qb.andWhere('customer.email LIKE :email', { email: `%${email}%` });
   }
-  if (id && !isNaN(Number(id))) {
-    qb = qb.andWhere("customer.id = :id", { id: id });
+  if (id) {
+    const numericId = Number(id);
+    if (!isNaN(numericId) && Number.isFinite(numericId)) {
+      qb.andWhere("customer.id = :id", { id: numericId });
+    }
   }
   if (stage && stage.trim() !== "") {
     qb = qb.andWhere("LOWER(customer.stage) LIKE :stageFilter", { stageFilter: `%${stage.toLowerCase()}%` });
@@ -991,6 +994,449 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
     return res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/customers/active-per-year:
+ *   get:
+ *     summary: Get count of active customers per year (last 3 years)
+ *     tags: [Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active customer stats for the last 3 years
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 currentYear:
+ *                   type: integer
+ *                   description: The most recent year in the data
+ *                 activeCustomers:
+ *                   type: integer
+ *                   description: Number of active customers in the current year
+ *                 percentageChange:
+ *                   type: number
+ *                   format: float
+ *                   description: Percentage change in active customers compared to previous year
+ *                 yearlyData:
+ *                   type: array
+ *                   description: List of yearly active customer counts (sorted ascending by year)
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       year:
+ *                         type: integer
+ *                         description: Year
+ *                       count:
+ *                         type: integer
+ *                         description: Number of active customers in that year
+ */
+export const getActiveCustomersPerYear = async (req: Request, res: Response): Promise<any> => {
+  try {
+
+    // Query to get count of active customers grouped by year (ignores null createdAt)
+    const result = await customerRepo
+      .createQueryBuilder("customer")
+      .select("YEAR(customer.createdAt)", "year")
+      .addSelect("COUNT(*)", "count")
+      .where("customer.status = :status", { status: "Active" })
+      .andWhere("customer.isDelete = :isDelete", { isDelete: false })
+      .groupBy("YEAR(customer.createdAt)")
+      .orderBy("YEAR(customer.createdAt)", "DESC")
+      .getRawMany();
+
+    if (!result || result.length === 0) {
+      return res.json({
+        currentYear: new Date().getFullYear(),
+        activeCustomers: 0,
+        percentageChange: 0,
+        yearlyData: []
+      });
+    }
+
+    // Convert safely
+    const yearlyData = result
+      .filter(r => r.year && !isNaN(Number(r.year)))
+      .map(r => ({
+        year: Number(r.year),
+        count: Number(r.count)
+      }))
+      .sort((a, b) => a.year - b.year);
+
+    // Handle if there are fewer than 2 years of data
+    const len = yearlyData.length;
+    const currentYear = yearlyData[len - 1]?.year || new Date().getFullYear();
+    const currentCount = yearlyData[len - 1]?.count || 0;
+    const prevCount = len > 1 ? yearlyData[len - 2].count : 0;
+
+    const percentageChange =
+      prevCount > 0 ? Number((((currentCount - prevCount) / prevCount) * 100).toFixed(1)) : 0;
+
+    return res.json({
+      currentYear,
+      activeCustomers: currentCount,
+      percentageChange,
+      yearlyData
+    });
+  } catch (error) {
+    console.error("Error in getActiveCustomersPerYear:", error);
+    return res.status(500).json({
+      message: "Error fetching active customers per year",
+      error
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/customers/total-per-year:
+ *   get:
+ *     summary: Get total customers per year, quarter, month, week, or day
+ *     tags: [Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: view
+ *         schema:
+ *           type: string
+ *           enum: [yearly, quarterly, monthly, weekly, daily]
+ *           default: yearly
+ *         description: Aggregation view (yearly, quarterly, monthly, weekly, daily)
+ *       - in: query
+ *         name: compareYears
+ *         schema:
+ *           type: string
+ *           example: "2023,2024"
+ *         description: Comma-separated list of years to compare (e.g. 2023,2024)
+ *     responses:
+ *       200:
+ *         description: Total customers per selected period(s)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 datasets:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: object
+ *                     properties:
+ *                       label:
+ *                         type: string
+ *                         description: Year label (e.g. "2023")
+ *                       data:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             x:
+ *                               type: string
+ *                               description: Period label (month, quarter, day, etc.)
+ *                             y:
+ *                               type: integer
+ *                               description: Customer count for the period
+ *       500:
+ *         description: Internal server error
+ */
+export const getTotalCustomersPerYear = async (req: Request, res: Response): Promise<any> => {
+  try {
+    console.log("getTotalCustomersPerYear");
+
+    const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | daily
+    const currentYear = new Date().getFullYear();
+    const compareYears = req.query.compareYears
+      ? (req.query.compareYears as string).split(",").map(y => Number(y.trim()))
+      : [currentYear];
+
+    const datasets: Record<number, { label: string; data: { x: string; y: number }[] }> = {};
+
+    // date range helpers
+    const getStartOf = (unit: string, year: number = currentYear) => {
+      const now = new Date();
+      switch (unit) {
+        case "year": return new Date(year, 0, 1, 0, 0, 0);
+        case "month": return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        case "week": return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
+        case "day": return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        default: return new Date(year, 0, 1, 0, 0, 0);
+      }
+    };
+
+    const getEndOf = (unit: string, year: number = currentYear) => {
+      const now = new Date();
+      switch (unit) {
+        case "year": return new Date(year, 11, 31, 23, 59, 59);
+        case "month": return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        case "week": return new Date();
+        case "day": return new Date();
+        default: return new Date(year, 11, 31, 23, 59, 59);
+      }
+    };
+
+    for (const year of compareYears) {
+      let dateFormat = "MONTHNAME(customer.createdAt)";
+      let groupExpr = "MONTH(customer.createdAt)";
+      let startDate = getStartOf("year", year);
+      let endDate = getEndOf("year", year);
+
+      switch (view.toLowerCase()) {
+        case "yearly":
+          dateFormat = "MONTHNAME(customer.createdAt)";
+          groupExpr = "MONTH(customer.createdAt)";
+          break;
+        case "quarterly":
+          dateFormat = "CONCAT('Q', QUARTER(customer.createdAt))";
+          groupExpr = "QUARTER(customer.createdAt)";
+          break;
+        case "monthly":
+          dateFormat = "DAY(customer.createdAt)";
+          groupExpr = "DAY(customer.createdAt)";
+          startDate = getStartOf("month");
+          endDate = getEndOf("month");
+          break;
+        case "weekly":
+          dateFormat = "DAYNAME(customer.createdAt)";
+          groupExpr = "DAYOFWEEK(customer.createdAt)";
+          startDate = getStartOf("week");
+          endDate = getEndOf("week");
+          break;
+        case "daily":
+        case "24hours":
+          dateFormat = "HOUR(customer.createdAt)";
+          groupExpr = "HOUR(customer.createdAt)";
+          startDate = getStartOf("day");
+          endDate = getEndOf("day");
+          break;
+      }
+
+      const rawData = await customerRepo
+        .createQueryBuilder("customer")
+        .select(`${dateFormat}`, "label")
+        .addSelect("COUNT(*)", "count")
+        .where("customer.isDelete = :isDelete", { isDelete: false })
+        .andWhere("YEAR(customer.createdAt) = :year", { year })
+        .andWhere("customer.createdAt BETWEEN :startDate AND :endDate", { startDate, endDate })
+        .groupBy(groupExpr)
+        .orderBy(groupExpr, "ASC")
+        .getRawMany();
+
+      const formattedData = rawData.map((r: any) => ({
+        x: r.label,
+        y: Number(r.count),
+      }));
+
+      datasets[year] = {
+        label: year.toString(),
+        data: formattedData,
+      };
+    }
+
+    // Compute totals and growth
+    const latestYear = Math.max(...compareYears);
+    const total = datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const prevYear = latestYear - 1;
+    const prevTotal = datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
+
+    return res.status(200).json({
+      totalCustomers: total,
+      growthPercentage: Number(growth.toFixed(2)),
+      datasets,
+    });
+  } catch (error) {
+    console.error("Error in getTotalCustomersPerYear:", error);
+    return res.status(500).json({
+      message: "Error fetching total customers per year",
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+};
+
+
+/**
+ * @swagger
+ * /api/customers/revenue-trend:
+ *   get:
+ *     summary: Get revenue trend per year (with growth)
+ *     description: Returns the total number of customers for each year (or other time view), including growth percentage and datasets for charting.
+ *     tags:
+ *       - Customers
+ *     parameters:
+ *       - in: query
+ *         name: view
+ *         schema:
+ *           type: string
+ *           enum: [yearly, quarterly, monthly, weekly, 24hours]
+ *         description: The time view for grouping results (default is yearly)
+ *       - in: query
+ *         name: compareYears
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of years to compare (e.g., "2023,2024")
+ *     responses:
+ *       200:
+ *         description: Total customers and growth data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalRevenue:
+ *                   type: integer
+ *                   description: Total number of customers for the latest year
+ *                 growthPercentage:
+ *                   type: number
+ *                   format: float
+ *                   description: Growth percentage compared to previous year
+ *                 datasets:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: object
+ *                     properties:
+ *                       label:
+ *                         type: string
+ *                       data:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             x:
+ *                               type: string
+ *                             y:
+ *                               type: integer
+ *       500:
+ *         description: Error fetching revenue trend per year
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 error:
+ *                   type: string
+ */
+export const getRevenueTrend = async (req: Request, res: Response): Promise<any> => {
+  try {
+    console.log("getRevenueTrend");
+
+    const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | 24hours
+    const currentYear = new Date().getFullYear();
+
+    const compareYears = req.query.compareYears
+      ? (req.query.compareYears as string).split(",").map(y => Number(y.trim()))
+      : [currentYear];
+
+    const datasets: Record<number, { label: string; data: { x: string; y: number }[] }> = {};
+
+    // 🧭 Helper functions for date ranges
+    const getStartOf = (unit: string, year: number = currentYear) => {
+      const now = new Date();
+      switch (unit) {
+        case "year": return new Date(year, 0, 1, 0, 0, 0);
+        case "month": return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        case "week": return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
+        case "day": return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        default: return new Date(year, 0, 1, 0, 0, 0);
+      }
+    };
+
+    const getEndOf = (unit: string, year: number = currentYear) => {
+      const now = new Date();
+      switch (unit) {
+        case "year": return new Date(year, 11, 31, 23, 59, 59);
+        case "month": return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        case "week": return new Date();
+        case "day": return new Date();
+        default: return new Date(year, 11, 31, 23, 59, 59);
+      }
+    };
+
+    for (const year of compareYears) {
+      let dateFormat = "MONTHNAME(transaction.transactionDate)";
+      let groupExpr = "MONTH(transaction.transactionDate)";
+      let startDate = getStartOf("year", year);
+      let endDate = getEndOf("year", year);
+
+      switch (view.toLowerCase()) {
+        case "yearly":
+          dateFormat = "MONTHNAME(transaction.transactionDate)";
+          groupExpr = "MONTH(transaction.transactionDate)";
+          break;
+        case "quarterly":
+          dateFormat = "CONCAT('Q', QUARTER(transaction.transactionDate))";
+          groupExpr = "QUARTER(transaction.transactionDate)";
+          break;
+        case "monthly":
+          dateFormat = "DAY(transaction.transactionDate)";
+          groupExpr = "DAY(transaction.transactionDate)";
+          startDate = getStartOf("month");
+          endDate = getEndOf("month");
+          break;
+        case "weekly":
+          dateFormat = "DAYNAME(transaction.transactionDate)";
+          groupExpr = "DAYOFWEEK(transaction.transactionDate)";
+          startDate = getStartOf("week");
+          endDate = getEndOf("week");
+          break;
+        case "24hours":
+          dateFormat = "HOUR(transaction.transactionDate)";
+          groupExpr = "HOUR(transaction.transactionDate)";
+          startDate = getStartOf("day");
+          endDate = getEndOf("day");
+          break;
+      }
+
+      const rawData = await transactionRepo
+        .createQueryBuilder("transaction")
+        .select(`${dateFormat}`, "label")
+        .addSelect("COALESCE(SUM(transaction.amount), 0)", "revenue")
+        .where("transaction.isDeleted = :isDeleted", { isDeleted: false })
+        .andWhere("transaction.status = :status", { status: "completed" })
+        .andWhere("YEAR(transaction.transactionDate) = :year", { year })
+        .andWhere("transaction.transactionDate BETWEEN :startDate AND :endDate", {
+          startDate,
+          endDate,
+        })
+        .groupBy(groupExpr)
+        .orderBy(groupExpr, "ASC")
+        .getRawMany();
+
+      const formattedData = rawData.map((r: any) => ({
+        x: r.label,
+        y: Number(r.revenue),
+      }));
+
+      datasets[year] = {
+        label: year.toString(),
+        data: formattedData,
+      };
+    }
+
+    // 📈 Totals & growth calculation
+    const latestYear = Math.max(...compareYears);
+    const total = datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const prevYear = latestYear - 1;
+    const prevTotal = datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
+
+    return res.status(200).json({
+      totalRevenue: Number(total.toFixed(2)),
+      growthPercentage: Number(growth.toFixed(2)),
+      datasets,
+    });
+  } catch (error) {
+    console.error("Error in getRevenueTrend:", error);
+    return res.status(500).json({
+      message: "Error fetching revenue trends",
+      error: error instanceof Error ? error.message : error,
     });
   }
 };
