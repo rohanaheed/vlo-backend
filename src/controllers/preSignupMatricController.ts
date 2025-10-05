@@ -1301,3 +1301,141 @@ export const getFunnelConversion = async (req: Request, res: Response): Promise<
   }
 };
 
+
+/**
+ * @swagger
+ * /api/pre-signup-metrics/funnel-conversion:
+ *   post:
+ *     tags:
+ *       - Pre-Signup Metrics
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - category
+ *               - metricType
+ *               - value
+ *               - date
+ *               - source
+ *             properties:
+ *               category:
+ *                 type: string
+ *                 description: Metric category (e.g. "pre_signup", "signup_abandonment", etc.)
+ *               metricType:
+ *                 type: string
+ *                 description: Metric type (e.g. "anonymous_visitors", "lead_magnet_engagers", etc.)
+ *               value:
+ *                 type: number
+ *                 description: Numeric value for the metric
+ *               date:
+ *                 type: string
+ *                 format: date-time
+ *                 description: ISO date string for the metric
+ *               source:
+ *                 type: string
+ *                 description: Source of the metric (e.g. "homepage", "landing", etc.)
+ *               metadata:
+ *                 type: object
+ *                 description: Optional metadata for the metric
+ *     responses:
+ *       201:
+ *         description: Funnel metric created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *       500:
+ *         description: Error creating funnel metric
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 error:
+ *                   type: string
+ *     summary: Create a new funnel metric
+ *     description: Creates a new funnel metric for the given category and metric type.
+ */
+export const createFunnelMetric = async (req: Request, res: Response): Promise<any> => {
+  try {
+    // 🧾 Extract and validate input
+    const {
+      category,
+      metricType,
+      value,
+      date,
+      source,
+      metadata,
+    } = req.body;
+
+    if (!category || !metricType) {
+      return res.status(400).json({
+        message: "Missing required fields: category and metricType are required.",
+      });
+    }
+
+    // 🧭 Ensure value and date are properly set
+    const metricValue = typeof value === "number" ? value : 0;
+    const metricDate = date ? new Date(date) : new Date();
+
+    // 🧮 Optional: Prevent duplicate for same date + metricType
+    const existing = await metricRepo.findOne({
+      where: {
+        category,
+        metricType,
+        date: metricDate,
+        isDelete: false,
+      },
+    });
+
+    if (existing) {
+      // If record exists, update the existing value instead of inserting
+      existing.value += metricValue;
+      existing.updatedAt = new Date();
+      existing.source = source || existing.source;
+      existing.metadata = metadata || existing.metadata;
+      await metricRepo.save(existing);
+      return res.status(200).json({
+        message: "Metric updated successfully",
+        data: existing,
+      });
+    }
+
+    // 🧩 Create new record
+    const newMetric = metricRepo.create({
+      category,
+      metricType,
+      value: metricValue,
+      date: metricDate,
+      source: source || null,
+      metadata: metadata || null,
+      isDelete: false,
+    });
+
+    const saved = await metricRepo.save(newMetric);
+
+    return res.status(201).json({
+      message: "Metric created successfully",
+      data: saved,
+    });
+  } catch (error) {
+    console.error("Error in createFunnelMetric:", error);
+    return res.status(500).json({
+      message: "Error creating funnel metric",
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+};
+

@@ -7,10 +7,12 @@ import {
   getPreSignupMetrics,
   getRetentionPaymentMetrics,
   getSignupAbandonmentMetrics,
+  createFunnelMetric,
 } from '../controllers/preSignupMatricController';
 import { authorize } from '../middleware/auth';
 import { asyncHandler } from "../middleware/asyncHandler";
-// import { validateRequest } from "../middleware/validateRequest";
+import { validateRequest } from "../middleware/validateRequest";
+import { createFunnelMetricSchema } from "../utils/validators/inputValidator";
 
 const router = Router();
 
@@ -30,5 +32,7 @@ router.get('/plan-distribution', authorize(["super_admin"]), asyncHandler(getPla
 router.get('/churn-prediction', authorize(["super_admin"]), asyncHandler(getChurnPrediction));
 
 router.get('/funnel-conversion', authorize(["super_admin"]), asyncHandler(getFunnelConversion));
+
+router.post('/funnel-conversion', authorize(["super_admin"]), validateRequest(createFunnelMetricSchema), asyncHandler(createFunnelMetric));
 
 export default router; 

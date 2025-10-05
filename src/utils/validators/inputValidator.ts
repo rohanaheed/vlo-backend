@@ -468,5 +468,22 @@ export const updateHeadsUpSchema = Joi.object({
   avgActivityLevel: Joi.number().integer().min(0).optional()
 });
 
+export const createFunnelMetricSchema = Joi.object({
+  category: Joi.string().required(),
+  metricType: Joi.string().required(),
+  value: Joi.number().required(),
+  date: Joi.date().iso().required(),
+  source: Joi.string().required(),
+  metadata: Joi.object().optional()
+});
+
+export const updateFunnelMetricSchema = Joi.object({
+  category: Joi.string().optional(),
+  metricType: Joi.string().optional(),
+  value: Joi.number().optional(),
+  date: Joi.date().iso().optional(),
+  source: Joi.string().optional(),
+  metadata: Joi.object().optional()
+});
 
 
