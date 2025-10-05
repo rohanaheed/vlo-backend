@@ -33,7 +33,7 @@ import { PackageModule } from "../entity/PackageModule"
 import { Subcategory } from "../entity/Subcategory"
 import { CustomfieldGroup } from "../entity/CustomfieldGroup"
 import { CustomField } from "../entity/CustomField"
-import { PreSignupMatric } from "../entity/PreSignUpMatric"
+import { PreSignupMatric } from "../entity/PreSignupMatric"
 
 export const AppDataSource = new DataSource({
   type: "mysql",

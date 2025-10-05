@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AppDataSource } from "../config/db";
-import { PreSignupMatric } from "../entity/PreSignUpMatric";
+import { PreSignupMatric } from "../entity/PreSignupMatric";
 import { Subscription } from "../entity/Subscription";
 import { Package } from "../entity/Package";
 
