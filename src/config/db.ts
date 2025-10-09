@@ -34,6 +34,14 @@ import { Subcategory } from "../entity/Subcategory"
 import { CustomfieldGroup } from "../entity/CustomfieldGroup"
 import { CustomField } from "../entity/CustomField"
 import { PreSignupMatric } from "../entity/PreSignupMatric"
+import { MarketingCampaign } from "../entity/MarketingCampaign"
+import { CampaignChannel } from "../entity/CampaignChannel"
+import { CampaignMedia } from "../entity/CampaignMedia"
+import { Lead } from "../entity/Lead"
+import { EmailPerformance } from "../entity/EmailPerformance"
+import { SocialMediaPerformance } from "../entity/SocialMediaPerformance"
+import { SMSPerformance } from "../entity/SMSPerformance"
+import { GoogleAdsPerformance } from "../entity/GoogleAdsPerformance"
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -42,7 +50,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  synchronize: false,
+  synchronize: true,
   logging: false,
   entities: [
     Business,
@@ -78,6 +86,14 @@ export const AppDataSource = new DataSource({
     Subcategory,
     CustomfieldGroup,
     CustomField,
-    PreSignupMatric
+    PreSignupMatric,
+    MarketingCampaign,
+    CampaignChannel,
+    CampaignMedia,
+    Lead,
+    EmailPerformance,
+    SocialMediaPerformance,
+    SMSPerformance,
+    GoogleAdsPerformance
   ]
 });

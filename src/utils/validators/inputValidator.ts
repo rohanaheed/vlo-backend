@@ -486,4 +486,328 @@ export const updateFunnelMetricSchema = Joi.object({
   metadata: Joi.object().optional()
 });
 
+// Marketing Campaign Validators
+export const campaignSchema = Joi.object({
+  campaignName: Joi.string().min(2).max(255).required(),
+  description: Joi.string().max(1000).optional(),
+  campaignType: Joi.string().valid('Email', 'SMS', 'Social Media', 'Google Ads', 'WhatsApp', 'Telegram').required(),
+  startDate: Joi.date().iso().optional(),
+  endDate: Joi.date().iso().optional(),
+  budget: Joi.number().min(0).optional().default(0),
+  status: Joi.string().valid('Draft', 'Active', 'Paused', 'Completed', 'Cancelled').optional().default('Draft'),
+  audienceTargeting: Joi.string().max(500).optional(),
+  content: Joi.string().max(2000).optional(),
+  subjectLine: Joi.string().max(255).optional(),
+  scheduleConfig: Joi.object().optional(),
+  campaignSettings: Joi.object().optional(),
+  businessId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  currencyId: Joi.number().integer().min(0).optional(),
+  packageId: Joi.number().integer().min(0).optional(),
+  subscriptionId: Joi.number().integer().min(0).optional()
+});
+
+// Lead Validators
+export const leadSchema = Joi.object({
+  leadName: Joi.string().min(2).max(255).required(),
+  email: Joi.string().email().optional(),
+  phoneNumber: Joi.string().max(20).optional(),
+  company: Joi.string().max(255).optional(),
+  jobTitle: Joi.string().max(255).optional(),
+  leadSource: Joi.string().valid('Website', 'Referral', 'Email Campaign', 'Social Media', 'Google Ads', 'Cold Call', 'Trade Show', 'Other').optional().default('Website'),
+  status: Joi.string().valid('New', 'Contacted', 'Qualified', 'Unqualified', 'Converted', 'Lost').optional().default('New'),
+  notes: Joi.string().max(1000).optional(),
+  estimatedValue: Joi.number().min(0).optional().default(0),
+  customFields: Joi.object().optional(),
+  website: Joi.string().uri().optional(),
+  linkedinUrl: Joi.string().uri().optional(),
+  twitterHandle: Joi.string().max(50).optional(),
+  address: Joi.string().max(500).optional(),
+  city: Joi.string().max(100).optional(),
+  state: Joi.string().max(100).optional(),
+  country: Joi.string().max(100).optional(),
+  postalCode: Joi.string().max(20).optional(),
+  userId: Joi.number().integer().min(0).optional(),
+  businessId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  campaignId: Joi.number().integer().min(0).optional(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  emailCampaignId: Joi.number().integer().min(0).optional(),
+  socialPostId: Joi.number().integer().min(0).optional(),
+  smsCampaignId: Joi.number().integer().min(0).optional(),
+  googleAdsId: Joi.number().integer().min(0).optional()
+});
+
+// Email Performance Validators
+export const emailPerformanceSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  userId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  currencyId: Joi.number().integer().min(0).optional(),
+  date: Joi.date().iso().required(),
+  campaignName: Joi.string().max(255).optional(),
+  emailsSent: Joi.number().min(0).optional().default(0),
+  totalOpened: Joi.number().min(0).optional().default(0),
+  totalClicked: Joi.number().min(0).optional().default(0),
+  totalBounced: Joi.number().min(0).optional().default(0),
+  totalUnsubscribed: Joi.number().min(0).optional().default(0),
+  openRate: Joi.number().min(0).max(100).optional().default(0),
+  clickRate: Joi.number().min(0).max(100).optional().default(0),
+  bounceRate: Joi.number().min(0).max(100).optional().default(0),
+  unsubscribeRate: Joi.number().min(0).max(100).optional().default(0),
+  uniqueOpens: Joi.number().min(0).optional().default(0),
+  uniqueClicks: Joi.number().min(0).optional().default(0),
+  uniqueOpenRate: Joi.number().min(0).max(100).optional().default(0),
+  uniqueClickRate: Joi.number().min(0).max(100).optional().default(0),
+  spamComplaints: Joi.number().min(0).optional().default(0),
+  spamComplaintRate: Joi.number().min(0).max(100).optional().default(0),
+  revenue: Joi.number().min(0).optional().default(0),
+  conversions: Joi.number().min(0).optional().default(0),
+  conversionRate: Joi.number().min(0).max(100).optional().default(0),
+  deviceBreakdown: Joi.object().optional(),
+  locationBreakdown: Joi.object().optional(),
+  timeBreakdown: Joi.object().optional()
+});
+
+// Social Media Performance Validators
+export const socialMediaPerformanceSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  userId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  currencyId: Joi.number().integer().min(0).optional(),
+  channelType: Joi.string().valid('Twitter', 'TikTok', 'YouTube', 'Instagram', 'LinkedIn', 'Facebook', 'Telegram').required(),
+  postId: Joi.string().max(255).optional(),
+  postContent: Joi.string().max(2000).optional(),
+  date: Joi.date().iso().required(),
+  impressions: Joi.number().min(0).optional().default(0),
+  reach: Joi.number().min(0).optional().default(0),
+  engagements: Joi.number().min(0).optional().default(0),
+  likes: Joi.number().min(0).optional().default(0),
+  comments: Joi.number().min(0).optional().default(0),
+  shares: Joi.number().min(0).optional().default(0),
+  retweets: Joi.number().min(0).optional().default(0),
+  saves: Joi.number().min(0).optional().default(0),
+  views: Joi.number().min(0).optional().default(0),
+  watchTimeMinutes: Joi.number().min(0).optional().default(0),
+  followersGained: Joi.number().min(0).optional().default(0),
+  subscribersGained: Joi.number().min(0).optional().default(0),
+  connectionsGained: Joi.number().min(0).optional().default(0),
+  pageLikes: Joi.number().min(0).optional().default(0),
+  forwards: Joi.number().min(0).optional().default(0),
+  clicks: Joi.number().min(0).optional().default(0),
+  profileViews: Joi.number().min(0).optional().default(0),
+  websiteClicks: Joi.number().min(0).optional().default(0),
+  engagementRate: Joi.number().min(0).max(100).optional().default(0),
+  clickThroughRate: Joi.number().min(0).max(100).optional().default(0),
+  reachRate: Joi.number().min(0).max(100).optional().default(0),
+  impressionRate: Joi.number().min(0).max(100).optional().default(0),
+  revenue: Joi.number().min(0).optional().default(0),
+  conversions: Joi.number().min(0).optional().default(0),
+  conversionRate: Joi.number().min(0).max(100).optional().default(0),
+  demographicBreakdown: Joi.object().optional(),
+  deviceBreakdown: Joi.object().optional(),
+  locationBreakdown: Joi.object().optional(),
+  timeBreakdown: Joi.object().optional(),
+  hashtagPerformance: Joi.object().optional(),
+  mentionPerformance: Joi.object().optional()
+});
+
+// SMS Performance Validators
+export const smsPerformanceSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  userId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  currencyId: Joi.number().integer().min(0).optional(),
+  date: Joi.date().iso().required(),
+  campaignName: Joi.string().max(255).optional(),
+  smsSent: Joi.number().min(0).optional().default(0),
+  delivered: Joi.number().min(0).optional().default(0),
+  failed: Joi.number().min(0).optional().default(0),
+  replies: Joi.number().min(0).optional().default(0),
+  optOuts: Joi.number().min(0).optional().default(0),
+  clicks: Joi.number().min(0).optional().default(0),
+  conversions: Joi.number().min(0).optional().default(0),
+  deliveryRate: Joi.number().min(0).max(100).optional().default(0),
+  failureRate: Joi.number().min(0).max(100).optional().default(0),
+  replyRate: Joi.number().min(0).max(100).optional().default(0),
+  optOutRate: Joi.number().min(0).max(100).optional().default(0),
+  clickThroughRate: Joi.number().min(0).max(100).optional().default(0),
+  conversionRate: Joi.number().min(0).max(100).optional().default(0),
+  cost: Joi.number().min(0).optional().default(0),
+  revenue: Joi.number().min(0).optional().default(0),
+  costPerSMS: Joi.number().min(0).optional().default(0),
+  costPerDelivery: Joi.number().min(0).optional().default(0),
+  costPerReply: Joi.number().min(0).optional().default(0),
+  costPerConversion: Joi.number().min(0).optional().default(0),
+  revenuePerSMS: Joi.number().min(0).optional().default(0),
+  roi: Joi.number().optional().default(0),
+  carrierBreakdown: Joi.object().optional(),
+  countryBreakdown: Joi.object().optional(),
+  regionBreakdown: Joi.object().optional(),
+  timeBreakdown: Joi.object().optional(),
+  messageType: Joi.string().max(50).optional(),
+  messageLength: Joi.number().min(0).optional().default(0),
+  keywordPerformance: Joi.object().optional(),
+  linkPerformance: Joi.object().optional(),
+  invalidNumber: Joi.number().min(0).optional().default(0),
+  blockedNumber: Joi.number().min(0).optional().default(0),
+  spamFiltered: Joi.number().min(0).optional().default(0),
+  errorBreakdown: Joi.object().optional()
+});
+
+// Google Ads Performance Validators
+export const googleAdsPerformanceSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  userId: Joi.number().integer().min(0).optional(),
+  customerId: Joi.number().integer().min(0).optional(),
+  currencyId: Joi.number().integer().min(0).optional(),
+  date: Joi.date().iso().required(),
+  campaignName: Joi.string().max(255).optional(),
+  adGroupName: Joi.string().max(255).optional(),
+  adId: Joi.string().max(255).optional(),
+  keyword: Joi.string().max(255).optional(),
+  impressions: Joi.number().min(0).optional().default(0),
+  clicks: Joi.number().min(0).optional().default(0),
+  conversions: Joi.number().min(0).optional().default(0),
+  cost: Joi.number().min(0).optional().default(0),
+  revenue: Joi.number().min(0).optional().default(0),
+  ctr: Joi.number().min(0).max(100).optional().default(0),
+  cpc: Joi.number().min(0).optional().default(0),
+  cpm: Joi.number().min(0).optional().default(0),
+  cpa: Joi.number().min(0).optional().default(0),
+  conversionRate: Joi.number().min(0).max(100).optional().default(0),
+  roas: Joi.number().optional().default(0),
+  roi: Joi.number().optional().default(0),
+  qualityScore: Joi.number().min(0).max(10).optional().default(0),
+  avgCpc: Joi.number().min(0).optional().default(0),
+  avgPosition: Joi.number().min(0).optional().default(0),
+  searchImpressions: Joi.number().min(0).optional().default(0),
+  searchClicks: Joi.number().min(0).optional().default(0),
+  searchCtr: Joi.number().min(0).max(100).optional().default(0),
+  searchCost: Joi.number().min(0).optional().default(0),
+  displayImpressions: Joi.number().min(0).optional().default(0),
+  displayClicks: Joi.number().min(0).optional().default(0),
+  displayCtr: Joi.number().min(0).max(100).optional().default(0),
+  displayCost: Joi.number().min(0).optional().default(0),
+  videoViews: Joi.number().min(0).optional().default(0),
+  videoClicks: Joi.number().min(0).optional().default(0),
+  videoViewRate: Joi.number().min(0).max(100).optional().default(0),
+  videoCost: Joi.number().min(0).optional().default(0),
+  shoppingImpressions: Joi.number().min(0).optional().default(0),
+  shoppingClicks: Joi.number().min(0).optional().default(0),
+  shoppingCtr: Joi.number().min(0).max(100).optional().default(0),
+  shoppingCost: Joi.number().min(0).optional().default(0),
+  ageGroupBreakdown: Joi.object().optional(),
+  genderBreakdown: Joi.object().optional(),
+  locationBreakdown: Joi.object().optional(),
+  deviceBreakdown: Joi.object().optional(),
+  timeBreakdown: Joi.object().optional(),
+  interestBreakdown: Joi.object().optional(),
+  remarketingBreakdown: Joi.object().optional(),
+  campaignType: Joi.string().max(100).optional(),
+  biddingStrategy: Joi.string().max(100).optional(),
+  networkType: Joi.string().max(100).optional(),
+  budget: Joi.number().min(0).optional().default(0),
+  dailyBudget: Joi.number().min(0).optional().default(0)
+});
+
+// Campaign Channel Validators
+export const campaignChannelSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  channelType: Joi.string().valid('Email', 'Twitter', 'TikTok', 'YouTube', 'WhatsApp', 'SMS', 'Instagram', 'LinkedIn', 'Facebook', 'Google Ads', 'Twilio').required(),
+  channelName: Joi.string().max(255).optional(),
+  channelUrl: Joi.string().uri().optional(),
+  channelCredentials: Joi.object().optional(),
+  isActive: Joi.boolean().optional().default(true),
+  channelSettings: Joi.object().optional()
+});
+
+// Campaign Media Validators
+export const campaignMediaSchema = Joi.object({
+  campaignId: Joi.number().integer().positive().required(),
+  campaignChannelId: Joi.number().integer().min(0).optional(),
+  mediaUrl: Joi.string().uri().required(),
+  mediaType: Joi.string().valid('image', 'video', 'document', 'audio', 'gif').optional().default('image'),
+  mediaTitle: Joi.string().max(255).optional(),
+  mediaDescription: Joi.string().max(1000).optional(),
+  mediaSize: Joi.number().min(0).optional().default(0),
+  mediaDuration: Joi.number().min(0).optional().default(0),
+  thumbnailUrl: Joi.string().uri().optional(),
+  altText: Joi.string().max(255).optional(),
+  tags: Joi.array().items(Joi.string()).optional().default([]),
+  isActive: Joi.boolean().optional().default(true)
+});
+
+// Bulk Operations Validators
+export const bulkCampaignsSchema = Joi.object({
+  campaigns: Joi.array().items(
+    Joi.object({
+      campaignName: Joi.string().min(2).max(255).required(),
+      description: Joi.string().max(1000).optional(),
+      campaignType: Joi.string().valid('Email', 'SMS', 'Social Media', 'Google Ads', 'WhatsApp', 'Telegram').required(),
+      startDate: Joi.date().iso().optional(),
+      endDate: Joi.date().iso().optional(),
+      budget: Joi.number().min(0).optional().default(0),
+      status: Joi.string().valid('Draft', 'Active', 'Paused', 'Completed', 'Cancelled').optional().default('Draft'),
+      audienceTargeting: Joi.string().max(500).optional(),
+      content: Joi.string().max(2000).optional(),
+      subjectLine: Joi.string().max(255).optional(),
+      scheduleConfig: Joi.object().optional(),
+      campaignSettings: Joi.object().optional(),
+      businessId: Joi.number().integer().min(0).optional(),
+      customerId: Joi.number().integer().min(0).optional(),
+      currencyId: Joi.number().integer().min(0).optional(),
+      packageId: Joi.number().integer().min(0).optional(),
+      subscriptionId: Joi.number().integer().min(0).optional()
+    })
+  ).min(1).max(50).required()
+});
+
+export const bulkLeadsSchema = Joi.object({
+  leads: Joi.array().items(
+    Joi.object({
+      leadName: Joi.string().min(2).max(255).required(),
+      email: Joi.string().email().optional(),
+      phoneNumber: Joi.string().max(20).optional(),
+      company: Joi.string().max(255).optional(),
+      jobTitle: Joi.string().max(255).optional(),
+      leadSource: Joi.string().valid('Website', 'Referral', 'Email Campaign', 'Social Media', 'Google Ads', 'Cold Call', 'Trade Show', 'Other').optional().default('Website'),
+      status: Joi.string().valid('New', 'Contacted', 'Qualified', 'Unqualified', 'Converted', 'Lost').optional().default('New'),
+      notes: Joi.string().max(1000).optional(),
+      estimatedValue: Joi.number().min(0).optional().default(0),
+      customFields: Joi.object().optional(),
+      website: Joi.string().uri().optional(),
+      linkedinUrl: Joi.string().uri().optional(),
+      twitterHandle: Joi.string().max(50).optional(),
+      address: Joi.string().max(500).optional(),
+      city: Joi.string().max(100).optional(),
+      state: Joi.string().max(100).optional(),
+      country: Joi.string().max(100).optional(),
+      postalCode: Joi.string().max(20).optional(),
+      userId: Joi.number().integer().min(0).optional(),
+      businessId: Joi.number().integer().min(0).optional(),
+      customerId: Joi.number().integer().min(0).optional(),
+      campaignId: Joi.number().integer().min(0).optional(),
+      campaignChannelId: Joi.number().integer().min(0).optional(),
+      emailCampaignId: Joi.number().integer().min(0).optional(),
+      socialPostId: Joi.number().integer().min(0).optional(),
+      smsCampaignId: Joi.number().integer().min(0).optional(),
+      googleAdsId: Joi.number().integer().min(0).optional()
+    })
+  ).min(1).max(100).required()
+});
+
+export const bulkUpdateSchema = Joi.object({
+  campaignIds: Joi.array().items(Joi.number().integer().positive()).min(1).max(100).required(),
+  updateData: Joi.object().min(1).required()
+});
+
+export const bulkDeleteSchema = Joi.object({
+  campaignIds: Joi.array().items(Joi.number().integer().positive()).min(1).max(100).required()
+});
+
 

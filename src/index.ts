@@ -21,6 +21,7 @@ import timeBillRoutes from "./routes/timeBillRoutes";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
 import headsUpRoutes from "./routes/headsUpRoutes";
 import preSignupMatricRoutes from "./routes/preSignupMatricRoutes";
+import marketingRoutes from "./routes/marketingRoutes";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -572,6 +573,7 @@ app.use("/api/packages", packageRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/heads-up", headsUpRoutes);
 app.use("/api/pre-signup-metrics", preSignupMatricRoutes);
+app.use("/api/marketing", marketingRoutes);
 
 const PORT = process.env.PORT;
 
