@@ -810,4 +810,24 @@ export const bulkDeleteSchema = Joi.object({
   campaignIds: Joi.array().items(Joi.number().integer().positive()).min(1).max(100).required()
 });
 
+// Currency validation schemas
+export const currencySchema = Joi.object({
+  customerId: Joi.number().integer().min(0).required().default(0),
+  currencyCode: Joi.string().min(2).max(10).required(),
+  currencyName: Joi.string().min(2).max(100).required(),
+  currencySymbol: Joi.string().min(1).max(10).required(),
+  exchangeRate: Joi.number().min(0).optional().default(1),
+  isCrypto: Joi.boolean().optional().default(false),
+  USDPrice: Joi.number().min(0).optional().default(0)
+});
+
+export const updateCurrencySchema = Joi.object({
+  currencyCode: Joi.string().min(2).max(10).optional(),
+  currencyName: Joi.string().min(2).max(100).optional(),
+  currencySymbol: Joi.string().min(1).max(10).optional(),
+  exchangeRate: Joi.number().min(0).optional(),
+  isCrypto: Joi.boolean().optional(),
+  USDPrice: Joi.number().min(0).optional()
+});
+
 

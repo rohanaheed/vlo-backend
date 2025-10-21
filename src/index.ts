@@ -22,6 +22,7 @@ import subscriptionRoutes from "./routes/subscriptionRoutes";
 import headsUpRoutes from "./routes/headsUpRoutes";
 import preSignupMatricRoutes from "./routes/preSignupMatricRoutes";
 import marketingRoutes from "./routes/marketingRoutes";
+import currencyRoutes from "./routes/currencyRoutes";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -501,6 +502,47 @@ const swaggerOptions = {
             success: { type: 'boolean', example: false },
             message: { type: 'string', example: 'Internal Server Error' }
           }
+        },
+        Currency: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            customerId: { type: 'integer' },
+            currencyCode: { type: 'string', maxLength: 10 },
+            currencyName: { type: 'string', maxLength: 100 },
+            currencySymbol: { type: 'string', maxLength: 10 },
+            exchangeRate: { type: 'number', minimum: 0 },
+            isCrypto: { type: 'boolean' },
+            USDPrice: { type: 'number', minimum: 0 },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        CurrencyInput: {
+          type: 'object',
+          required: ['currencyCode', 'currencyName', 'currencySymbol'],
+          properties: {
+            customerId: { type: 'integer', minimum: 0, default: 0 },
+            currencyCode: { type: 'string', minLength: 2, maxLength: 10 },
+            currencyName: { type: 'string', minLength: 2, maxLength: 100 },
+            currencySymbol: { type: 'string', minLength: 1, maxLength: 10 },
+            exchangeRate: { type: 'number', minimum: 0, default: 1 },
+            isCrypto: { type: 'boolean', default: false },
+            USDPrice: { type: 'number', minimum: 0, default: 0 }
+          }
+        },
+        CurrencyUpdateInput: {
+          type: 'object',
+          properties: {
+            customerId: { type: 'integer', minimum: 0 },
+            currencyCode: { type: 'string', minLength: 2, maxLength: 10 },
+            currencyName: { type: 'string', minLength: 2, maxLength: 100 },
+            currencySymbol: { type: 'string', minLength: 1, maxLength: 10 },
+            exchangeRate: { type: 'number', minimum: 0 },
+            isCrypto: { type: 'boolean' },
+            USDPrice: { type: 'number', minimum: 0 }
+          }
         }
       },
       responses: {
@@ -574,6 +616,7 @@ app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/heads-up", headsUpRoutes);
 app.use("/api/pre-signup-metrics", preSignupMatricRoutes);
 app.use("/api/marketing", marketingRoutes);
+app.use("/api/currencies", currencyRoutes);
 
 const PORT = process.env.PORT;
 
