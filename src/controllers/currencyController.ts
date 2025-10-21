@@ -543,6 +543,56 @@ export const deleteCurrency = async (req: Request, res: Response): Promise<any> 
 
 /**
  * @swagger
+ * /api/currencies/all:
+ *   get:
+ *     summary: Get all currencies without pagination or filters
+ *     tags: [Currencies]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of all currencies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Currency'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of currencies
+ *       500:
+ *         description: Internal server error
+ */
+export const getAllCurrenciesSimple = async (req: Request, res: Response): Promise<any> => {
+  try {
+    // Get all currencies without any filters or pagination
+    const currencies = await currencyRepo.find({
+      where: { isDelete: false },
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: currencies,
+      total: currencies.length
+    });
+
+  } catch (error) {
+    console.error('Error getting all currencies:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * @swagger
  * /api/currencies/bulk:
  *   post:
  *     summary: Create multiple currencies

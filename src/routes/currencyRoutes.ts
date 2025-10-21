@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createCurrency,
   getAllCurrencies,
+  getAllCurrenciesSimple,
   getCurrencyById,
   updateCurrency,
   deleteCurrency,
@@ -37,6 +38,13 @@ router.get(
   '/',
   authorize(['super_admin']),
   asyncHandler(getAllCurrencies)
+);
+
+// Get all currencies without pagination or filters
+router.get(
+  '/all',
+  authorize(['super_admin']),
+  asyncHandler(getAllCurrenciesSimple)
 );
 
 // Get currency by ID
