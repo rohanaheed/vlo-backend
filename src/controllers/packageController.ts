@@ -75,6 +75,9 @@ const packageModuleRepo = AppDataSource.getRepository(PackageModule);
  *               notificationBeforeDays:
  *                 type: integer
  *                 description: Days before notification
+ *               currencyId:
+ *                 type: integer
+ *                 description: Currency ID
  *               status:
  *                 type: integer
  *                 description: Status code
@@ -189,7 +192,8 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
     communicationTools,
     cloudStorage,
     socialMediaConnectors,
-    extraAddOn
+    extraAddOn,
+    currencyId,
   } = req.body;
 
   // Check if package with same name already exists
@@ -223,7 +227,8 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
     cloudStorage,
     socialMediaConnectors,
     extraAddOn,
-    isDelete: false
+    isDelete: false,
+    currencyId
   });
 
   await packageRepo.save(newPackage);

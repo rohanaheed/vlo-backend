@@ -10,6 +10,9 @@ export class Package {
   @Column({ default: "" })
   name!: string;
 
+  @Column({ default: 0 })
+  currencyId!: number;
+
   @Column({ type: "enum", enum: ["Paid", "Free", "Trial", "Public Limited Company"] })
   type!: SubscriptionType;
 
