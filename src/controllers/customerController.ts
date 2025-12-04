@@ -5,13 +5,12 @@ import { User } from '../entity/User';
 import { customerSchema } from '../utils/validators/inputValidator';
 import { Status } from '../entity/Customer';
 import bcrypt from 'bcryptjs';
-import { generateOTP, sendCompanyRegistrationEmail, sendCustomerEmailVerification, sendVerificationEmail } from '../utils/emailUtils';
+import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/emailUtils';
 import { UserRole } from '../entity/User';
 import { uploadFileToS3 } from '../utils/s3Utils';
 import { Transaction } from '../entity/Transaction';
 import { Subscription } from '../entity/Subscription';
 import { Package } from '../entity/Package';
-
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
@@ -57,6 +56,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
         message: error.details[0].message
       });
     }
+
     // If logo is provided as a file or base64, upload to S3 and get URL
     if (value.logo) {
         // value.logo is a base64 string, so extract mime type and extension
@@ -123,7 +123,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
         message: 'A user with this email already exists.'
       });
     }
-    
+
     // Also create a user record for this customer so they can log in
     const user = new User();
     user.name = savedCustomer.firstName + " " + savedCustomer.lastName;
@@ -220,7 +220,6 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
  *                 totalTrials:
  *                   type: integer
  */
-
 
 export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
   try {
