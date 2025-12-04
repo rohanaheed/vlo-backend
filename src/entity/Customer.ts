@@ -52,6 +52,12 @@ export class Customer {
   @Column({ default: "" })
   businessAddress!: string;
 
+  @Column({default:""})
+  businessWebsite! : string;
+
+  @Column ({default : 0})
+  referralCode! : number;
+  
   @Column({ default: "" })
   phoneNumber!: string;
 
