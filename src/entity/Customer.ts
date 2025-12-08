@@ -49,8 +49,8 @@ export class Customer {
   @Column({ default: "" })
   businessType!: string;
 
-  @Column({ default: "" })
-  businessAddress!: string;
+  @Column({ type: "json", nullable: true })
+  businessAddress!: Record<string, any>;
 
   @Column({default:""})
   businessWebsite! : string;
@@ -78,6 +78,15 @@ export class Customer {
 
   @Column({ type: "enum", enum: ["Active", "Trial", "License Expired", "Free"], default: "Free" })
   status!: Status;
+
+  @Column({ nullable: true, type: "varchar", default: null })
+  otp!: string | null;
+
+  @Column({ nullable: true, type: "datetime", default: null })
+  otpExpiry!: Date | null;
+
+  @Column({default: false})
+  isEmailVerified!: boolean
 
   @CreateDateColumn()
   expiryDate!: Date;
