@@ -267,3 +267,43 @@ export const sendVerificationEmail = async (
     return false;
   }
 }; 
+
+export const sendCustomerEmailVerificationCode = async (
+  email: string,
+  verificationCode: string
+): Promise<boolean> => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Verify Customer Email',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">📧 Email Verification Code</h1>
+            <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px;">Welcome to VHR System</p>
+          </div>
+          <div style="padding: 20px; background-color: #ffffff;">
+            <p>Your email verification code is:</p>
+            <h2 style="background-color: #f8f9fa; padding: 15px; text-align: center; font-size: 24px; color: #333;">
+              ${verificationCode}
+            </h2>
+            <p>Please use this code to complete your email verification process.</p>
+            <p>This code will expire in 5 minutes.</p>
+            <p>If you didn't request this code, please ignore this email.</p>
+            <p>Best regards,<br>VHR Team</p>
+          </div>
+          <div style="background-color: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;">
+            <p>This is an automated email. Please do not reply to this message.</p>
+          </div>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Error sending customer verification email:', error);
+    return false;
+  }
+};
