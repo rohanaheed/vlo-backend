@@ -9,16 +9,26 @@ import {
   getDeletedCustomers,
   getActiveCustomersPerYear,
   getTotalCustomersPerYear,
-  getRevenueTrend
+  getRevenueTrend,
+  sendVerificationCode,
+  verifyEmailCode,
+  checkCustomerExist
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { customerSchema, registrationEmailSchema, updateCustomerSchema } from "../utils/validators/inputValidator";
+import { customerSchema, registrationEmailSchema, sendCodeSchema, updateCustomerSchema, verifyOTPSchema } from "../utils/validators/inputValidator";
 import { validateRequest } from "../middleware/validateRequest";
 
 const router = Router();
 
 router.post("/", authorize(["super_admin"]), validateRequest(customerSchema), asyncHandler(createCustomer));
+
+// Send Email Verification Code to Customer
+router.post("/send-email-verification-code", authorize(["super_admin"]), validateRequest(sendCodeSchema), asyncHandler(sendVerificationCode));
+
+// Verify Email Code
+router.post("/verify-verification-code", authorize(["super_admin"]), validateRequest(verifyOTPSchema), asyncHandler(verifyEmailCode));
+
 // Get active customers per year
 router.get("/active-per-year", authorize(["super_admin"]), asyncHandler(getActiveCustomersPerYear));
 
@@ -42,5 +52,7 @@ router.get("/:id", authorize(["super_admin", "user"]), asyncHandler(getCustomerB
 
 // Send registration email to customer
 router.post("/:customerId/send-registration-email", authorize(["super_admin", "user"]), validateRequest(registrationEmailSchema), asyncHandler(sendRegistrationEmail));
+
+router.post("/check-email", authorize(["super_admin"]), asyncHandler(checkCustomerExist));
 
 export default router;
