@@ -26,7 +26,15 @@ export const customerSchema = Joi.object({
   businessSize: Joi.number().integer().min(1).required(),
   businessEntity: Joi.string().required(),
   businessType: Joi.string().required(),
-  businessAddress: Joi.string().required(),
+  businessAddress: Joi.object({
+    buildingName: Joi.string().required(),
+    buildingNumber: Joi.string().required(),
+    street: Joi.string().required(),
+    town: Joi.string().required(),
+    city: Joi.string().required(),
+    country: Joi.string().required(),
+    postalCode: Joi.string().required(),
+  }).required(),
   phoneNumber: Joi.string().required().pattern(/^[0-9]{10,15}$/),
   email: Joi.string().email().required(),
   password: Joi.string().min(8).required(),
@@ -198,6 +206,10 @@ export const forgotPasswordSchema = Joi.object({
 export const verifyOTPSchema = Joi.object({
   email: Joi.string().email().required(),
   otp: Joi.string().length(6).pattern(/^[0-9]+$/).required()
+});
+
+export const sendCodeSchema = Joi.object({
+  email: Joi.string().email().required()
 });
 
 export const resetPasswordSchema = Joi.object({
