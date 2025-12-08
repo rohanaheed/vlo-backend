@@ -1,16 +1,25 @@
-import { Request, Response } from 'express';
-import { AppDataSource } from '../config/db';
-import { Customer } from '../entity/Customer';
-import { User } from '../entity/User';
-import { customerSchema } from '../utils/validators/inputValidator';
-import { Status } from '../entity/Customer';
-import bcrypt from 'bcryptjs';
-import { sendCompanyRegistrationEmail, sendVerificationEmail } from '../utils/emailUtils';
-import { UserRole } from '../entity/User';
-import { uploadFileToS3 } from '../utils/s3Utils';
-import { Transaction } from '../entity/Transaction';
-import { Subscription } from '../entity/Subscription';
-import { Package } from '../entity/Package';
+import { Request, Response } from "express";
+import { AppDataSource } from "../config/db";
+import { Customer } from "../entity/Customer";
+import { User } from "../entity/User";
+import {
+  customerSchema,
+  sendCodeSchema,
+  verifyOTPSchema,
+} from "../utils/validators/inputValidator";
+import { Status } from "../entity/Customer";
+import bcrypt from "bcryptjs";
+import {
+  generateOTP,
+  sendCompanyRegistrationEmail,
+  sendCustomerEmailVerificationCode,
+  sendVerificationEmail,
+} from "../utils/emailUtils";
+import { UserRole } from "../entity/User";
+import { uploadFileToS3 } from "../utils/s3Utils";
+import { Transaction } from "../entity/Transaction";
+import { Subscription } from "../entity/Subscription";
+import { Package } from "../entity/Package";
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
@@ -44,83 +53,121 @@ const packageRepo = AppDataSource.getRepository(Package);
  *       500:
  *         description: Internal server error
  */
-export const createCustomer = async (req: Request, res: Response): Promise<any> => {
+export const createCustomer = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const userId = (req as any).user.id;
+
     // Validate request body
     const { error, value } = customerSchema.validate(req.body);
-
     if (error) {
       return res.status(400).json({
         success: false,
-        message: error.details[0].message
+        message: error.details[0].message,
+      });
+    }
+
+    const email = value.email.trim().toLowerCase();
+
+    // Check if a verified customer already exists
+    const existingCustomer = await customerRepo.findOne({
+      where: { email, isDelete: false },
+    });
+
+    if (!existingCustomer) {
+      return res.status(400).json({
+        success: false,
+        message: "Please verify your email before creating a customer.",
+      });
+    }
+
+    if (!existingCustomer.isEmailVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is not verified. Please verify email first.",
       });
     }
 
     // If logo is provided as a file or base64, upload to S3 and get URL
     if (value.logo) {
-        // value.logo is a base64 string, so extract mime type and extension
-        const matches = value.logo.match(/^data:(.+);base64,(.*)$/);
-        if (!matches) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid base64 logo format.'
-            });
-        }
-        const mimeType = matches[1];
-        const base64Data = matches[2];
-        const ext = mimeType.split('/')[1] ? `.${mimeType.split('/')[1]}` : '';
-        const buffer = Buffer.from(base64Data, 'base64');
-        const key = `customers/${Date.now()}_${Math.random().toString(36).substring(2, 10)}${ext}`;
-        const originalname = `logo${ext}`;
-        const s3LogoUrl = await uploadFileToS3({
-          bucket: process.env.LOGO_BUCKET || '',
-          buffer: buffer,
-          originalname: originalname,
-          mimetype: mimeType,
-          key: key
+      const matches = value.logo.match(/^data:(.+);base64,(.*)$/);
+      if (!matches) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid base64 logo format.",
         });
-        value.logo = s3LogoUrl;
+      }
+
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      const ext = mimeType.split("/")[1] ? `.${mimeType.split("/")[1]}` : "";
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const key = `customers/${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 10)}${ext}`;
+
+      const originalname = `logo${ext}`;
+
+      const s3LogoUrl = await uploadFileToS3({
+        bucket: process.env.LOGO_BUCKET || "",
+        buffer,
+        originalname,
+        mimetype: mimeType,
+        key,
+      });
+
+      value.logo = s3LogoUrl;
     }
 
-    
+    // existing verified customer
+    const customer = existingCustomer;
 
-    // Create customer instance
-    const customer = new Customer();
     customer.createdByUserId = userId;
-    customer.logo = value.logo || '';
+    customer.logo = value.logo || "";
     customer.firstName = value.firstName;
     customer.lastName = value.lastName;
     customer.stage = value.stage;
     customer.churnRisk = value.churnRisk;
     customer.businessName = value.businessName;
     customer.tradingName = value.tradingName;
-    customer.note = value.note || '';
+    customer.note = value.note || "";
     customer.businessSize = value.businessSize;
     customer.businessEntity = value.businessEntity;
     customer.businessType = value.businessType;
-    customer.businessAddress = value.businessAddress || '';
-    customer.businessWebsite = value.businessWebsite || '';
+    customer.businessAddress = {
+      buildingName: value.businessAddress.buildingName,
+      buildingNumber: value.businessAddress.buildingNumber,
+      street: value.businessAddress.street,
+      town: value.businessAddress.town,
+      city: value.businessAddress.city,
+      country: value.businessAddress.country,
+      postalCode: value.businessAddress.postalCode,
+    };
+    customer.businessWebsite = value.businessWebsite || "";
     customer.referralCode = value.referralCode;
     customer.phoneNumber = value.phoneNumber;
-    customer.email = value.email;
     customer.password = await bcrypt.hash(value.password, 10); // Note: You should hash this password!
     customer.practiceArea = value.practiceArea || [];
     customer.status = value.status as Status;
     customer.expiryDate = value.expiryDate || new Date(); // Default to current date
     customer.isDelete = false;
-    customer.createdAt = new Date();
     customer.updatedAt = new Date();
     customer.lastActive = new Date();
 
     const savedCustomer = await customerRepo.save(customer);
     // Save the customer
     // Check if user already exists in the user table
-    const existingUser = await userRepo.findOne({ where: { email: customer.email, isDelete: false } });
+    const existingUser = await userRepo.findOne({
+      where: { email: customer.email, isDelete: false },
+    });
+
     if (existingUser) {
-      return console.warn({
+      return res.status(409).json({
         success: false,
-        message: 'A user with this email already exists.'
+        message: "A user with this email already exists.",
       });
     }
 
@@ -129,7 +176,7 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     user.name = savedCustomer.firstName + " " + savedCustomer.lastName;
     user.email = savedCustomer.email;
     user.password = savedCustomer.password; // already hashed above
-    user.role = 'customer' as UserRole; // or whatever role you use for customers
+    user.role = "customer" as UserRole;
     user.isDelete = false;
     user.createdAt = new Date();
     user.updatedAt = new Date();
@@ -140,41 +187,238 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
     const verificationEmailSent = await sendVerificationEmail(
       savedUser.email,
       savedUser.name,
-      process.env.FRONTEND_VERIFY_EMAIL_URL || 'https://vhr-system.com/verify-email'
+      process.env.FRONTEND_VERIFY_EMAIL_URL ||
+        "https://vhr-system.com/verify-email"
     );
 
     if (!verificationEmailSent) {
-      console.warn(`Failed to send verification email to ${savedUser.email} for user ${savedUser.id}`);
+      console.warn(`Failed to send verification email to ${savedUser.email}`);
     }
+
     // Send registration email
     const customerName = `${savedCustomer.firstName} ${savedCustomer.lastName}`;
     const emailSent = await sendCompanyRegistrationEmail(
       savedCustomer.email,
       customerName,
       savedCustomer.businessName,
-      process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
+      process.env.FRONTEND_LOGIN_URL || "https://vhr-system.com/login"
     );
 
-    // Log email status (don't fail the request if email fails)
     if (!emailSent) {
-      console.warn(`Failed to send registration email to ${savedCustomer.email} for customer ${savedCustomer.id}`);
+      console.warn(
+        `Failed to send registration email to ${savedCustomer.email}`
+      );
     }
 
     return res.status(201).json({
       success: true,
       data: savedCustomer,
-      message: 'Customer created successfully',
-      emailSent: emailSent
+      message: "Customer created successfully",
+      emailSent,
     });
-
   } catch (error) {
+    console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
 
+export const sendVerificationCode = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { error, value } = sendCodeSchema.validate(req.body);
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.details[0].message,
+      });
+    }
+    const validEmail = value.email;
+    // Check if email already exists in customer table
+    const existingCustomer = await customerRepo.findOne({
+      where: {
+        email: validEmail,
+        isDelete: false,
+      },
+    });
+
+    if (existingCustomer && existingCustomer.isEmailVerified) {
+      return res.status(409).json({
+        success: false,
+        message: "This email is already registered as a customer",
+      });
+    }
+
+    // Also check if email exists in user table
+    const existingUser = await userRepo.findOne({
+      where: {
+        email: validEmail,
+        isDelete: false,
+      },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "This email is already registered in the system",
+      });
+    }
+
+    // Generate verification code
+    const verificationCode = generateOTP();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    const existingUnverifiedCustomer = await customerRepo.findOne({
+      where: {
+        email: validEmail,
+        isEmailVerified: false,
+      },
+    });
+    if (existingUnverifiedCustomer) {
+      // Update existing unverified customer
+      existingUnverifiedCustomer.otp = verificationCode;
+      existingUnverifiedCustomer.otpExpiry = otpExpiry;
+      await customerRepo.save(existingUnverifiedCustomer);
+    } else {
+      // Create new temporary customer record
+      const tempCustomer = new Customer();
+      tempCustomer.email = validEmail;
+      tempCustomer.otp = verificationCode;
+      tempCustomer.otpExpiry = otpExpiry;
+      tempCustomer.isEmailVerified = false;
+
+      await customerRepo.save(tempCustomer);
+    }
+
+    const emailSent = await sendCustomerEmailVerificationCode(
+      validEmail,
+      verificationCode
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Email Verification Code Sent Successfully",
+      emailSent: emailSent,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const verifyEmailCode = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { error, value } = verifyOTPSchema.validate(req.body);
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.details[0].message,
+      });
+    }
+    const validEmail = value.email.trim();
+    const validCode = value.otp;
+    // Check if OTP provided
+    if (!validCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification Code Required",
+      });
+    }
+    // Check if Customer email and otp exist
+    const customer = await customerRepo.findOne({
+      where: {
+        email: validEmail,
+        otp: validCode,
+        isDelete: false,
+      },
+    });
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer Not Found",
+      });
+    }
+    // Check OTP provided is Correct
+    if (customer.otp !== validCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Verification Code",
+      });
+    }
+    // Check OTP Expiry
+    if (!customer.otpExpiry || customer.otpExpiry < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification Code Expired",
+      });
+    }
+    (customer.isEmailVerified = true),
+      (customer.otp = null),
+      (customer.otpExpiry = null);
+
+    await customerRepo.save(customer);
+
+    return res.status(201).json({
+      success: true,
+      message: "Customer Email Verified Sucessfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const checkCustomerExist = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { email } = req.body;
+    const customerExist = await customerRepo.findOne({
+      where: {
+        email: email,
+        isDelete: false,
+      },
+    });
+    const userExist = await userRepo.findOne({
+      where: {
+        email: email,
+        isDelete: false,
+      },
+    });
+    if (customerExist || userExist) {
+      return res.status(200).json({
+        success: true,
+        exists: true,
+        message: "This Email is already Registered in the system",
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        message: "Email is available",
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
 /**
  * @swagger
  * /api/customers/stats:
@@ -221,22 +465,31 @@ export const createCustomer = async (req: Request, res: Response): Promise<any> 
  *                   type: integer
  */
 
-export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
+export const getCustomerStats = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { state, year, month } = req.query;
 
     // ✅ Normalize filters
     const filters: Record<string, any> = {};
-    if (state && typeof state === "string" && state.trim() !== "") filters.state = state;
+    if (state && typeof state === "string" && state.trim() !== "")
+      filters.state = state;
     if (year && !isNaN(Number(year))) filters.year = Number(year);
     if (month && !isNaN(Number(month))) filters.month = Number(month);
 
     // ✅ Helper: apply filters to QueryBuilder
     const applyCustomerFilters = (qb: any, alias: string) => {
       qb.andWhere(`${alias}.isDelete = :isDelete`, { isDelete: false });
-      if (filters.state) qb.andWhere(`${alias}.status = :state`, { state: filters.state });
-      if (filters.year) qb.andWhere(`YEAR(${alias}.createdAt) = :year`, { year: filters.year });
-      if (filters.month) qb.andWhere(`MONTH(${alias}.createdAt) = :month`, { month: filters.month });
+      if (filters.state)
+        qb.andWhere(`${alias}.status = :state`, { state: filters.state });
+      if (filters.year)
+        qb.andWhere(`YEAR(${alias}.createdAt) = :year`, { year: filters.year });
+      if (filters.month)
+        qb.andWhere(`MONTH(${alias}.createdAt) = :month`, {
+          month: filters.month,
+        });
     };
 
     // ✅ Helper: group customers by year
@@ -252,11 +505,15 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
 
     // ✅ Helper: common customer query builder
     const makeCustomerQuery = (statusCondition?: string | string[]) => {
-      const qb = customerRepo.createQueryBuilder("customer").select(["customer.createdAt"]);
+      const qb = customerRepo
+        .createQueryBuilder("customer")
+        .select(["customer.createdAt"]);
       applyCustomerFilters(qb, "customer");
       if (statusCondition) {
         if (Array.isArray(statusCondition)) {
-          qb.andWhere("customer.status IN (:...statuses)", { statuses: statusCondition });
+          qb.andWhere("customer.status IN (:...statuses)", {
+            statuses: statusCondition,
+          });
         } else {
           qb.andWhere("customer.status = :status", { status: statusCondition });
         }
@@ -271,7 +528,7 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
       licenseExpiredCustomersArr,
       inactiveCustomersArr,
       totalTrialsArr,
-      revenueStats
+      revenueStats,
     ] = await Promise.all([
       makeCustomerQuery(), // all
       makeCustomerQuery("Active"),
@@ -348,8 +605,8 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
           WHERE status = 'completed'
           AND isDeleted = false
           AND createdAt >= NOW() - INTERVAL 1 DAY
-        `)
-      ])
+        `),
+      ]),
     ]);
 
     // ✅ Response
@@ -369,11 +626,11 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
     });
   } catch (error) {
     console.error("Error in getCustomerStats:", error);
-    return res.status(500).json({ message: "Error fetching customer stats", error });
+    return res
+      .status(500)
+      .json({ message: "Error fetching customer stats", error });
   }
 };
-
-
 
 /**
  * @swagger
@@ -477,15 +734,17 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
  *                 totalItems:
  *                   type: integer
  */
-export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
+export const getAllCustomers = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
   let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
-  let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+  let order: "ASC" | "DESC" =
+    orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
-
-
-  const email = (req.query.email as string) || '';
+  const email = (req.query.email as string) || "";
   const id = req.query.id as number | undefined;
   const stage = req.query.stage as string | undefined;
   const type = req.query.type as string | undefined;
@@ -493,14 +752,14 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
   const status = req.query.status as string | undefined;
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
- 
 
   // Use QueryBuilder for optimized full text search and filtering
-  let qb = customerRepo.createQueryBuilder("customer")
+  let qb = customerRepo
+    .createQueryBuilder("customer")
     .where("customer.isDelete = :isDelete", { isDelete: false });
 
   if (email) {
-    qb.andWhere('customer.email LIKE :email', { email: `%${email}%` });
+    qb.andWhere("customer.email LIKE :email", { email: `%${email}%` });
   }
   if (id) {
     const numericId = Number(id);
@@ -509,28 +768,40 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     }
   }
   if (stage && stage.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.stage) LIKE :stageFilter", { stageFilter: `%${stage.toLowerCase()}%` });
+    qb = qb.andWhere("LOWER(customer.stage) LIKE :stageFilter", {
+      stageFilter: `%${stage.toLowerCase()}%`,
+    });
   }
   if (type && type.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.businessType) LIKE :typeFilter", { typeFilter: `%${type.toLowerCase()}%` });
+    qb = qb.andWhere("LOWER(customer.businessType) LIKE :typeFilter", {
+      typeFilter: `%${type.toLowerCase()}%`,
+    });
   }
   if (typeof churnRisk === "string" && churnRisk.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.churnRisk) LIKE :churnRiskFilter", { churnRiskFilter: `%${churnRisk.toLowerCase()}%` });
+    qb = qb.andWhere("LOWER(customer.churnRisk) LIKE :churnRiskFilter", {
+      churnRiskFilter: `%${churnRisk.toLowerCase()}%`,
+    });
   }
-  if(startDate && endDate) {
-    qb = qb.andWhere("customer.createdAt BETWEEN :startDate AND :endDate", { startDate: new Date(startDate), endDate: new Date(endDate) });
+  if (startDate && endDate) {
+    qb = qb.andWhere("customer.createdAt BETWEEN :startDate AND :endDate", {
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    });
   }
-  if(startDate) {
-    qb = qb.andWhere("customer.createdAt >= :startDate", { startDate: new Date(startDate) });
+  if (startDate) {
+    qb = qb.andWhere("customer.createdAt >= :startDate", {
+      startDate: new Date(startDate),
+    });
   }
-  if(endDate) {
-    qb = qb.andWhere("customer.createdAt <= :endDate", { endDate: new Date(endDate) });
+  if (endDate) {
+    qb = qb.andWhere("customer.createdAt <= :endDate", {
+      endDate: new Date(endDate),
+    });
   }
   // if (status) {
   //   // Status is an enum field, so use exact match instead of LIKE
   //   qb = qb.andWhere("customer.status = :statusFilter", { statusFilter: status });
   // }
-
 
   // Use QueryBuilder for paginated, filtered, and ordered results
   const [customers, total] = await qb
@@ -540,7 +811,7 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     .getManyAndCount();
 
   // Get all subscriptions for these customers in one query
-  const customerIds = customers.map(c => c.id);
+  const customerIds = customers.map((c) => c.id);
   let subscriptions: any[] = [];
   if (customerIds.length > 0) {
     subscriptions = await subscriptionRepo
@@ -565,8 +836,8 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
       ])
       .where("package.id IN (:...packageIds)", { packageIds })
       .getMany()
-      .then(pkgs =>
-        pkgs.map(pkg => ({
+      .then((pkgs) =>
+        pkgs.map((pkg) => ({
           id: pkg.id,
           name: pkg.name,
           type: pkg.type,
@@ -590,7 +861,7 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
   });
 
   // Attach package details to each customer
-  const customersWithPackage = customers.map(customer => {
+  const customersWithPackage = customers.map((customer) => {
     const subscription = subscriptionMap.get(customer.id);
     let packageDetails = null;
     if (subscription) {
@@ -598,7 +869,7 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     }
     return {
       ...customer,
-      package: packageDetails
+      package: packageDetails,
     };
   });
 
@@ -614,7 +885,6 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
     totalCount: totalCount,
   });
 };
-
 
 /**
  * @swagger
@@ -677,35 +947,43 @@ export const getAllCustomers = async (req: Request, res: Response): Promise<any>
  *       500:
  *         description: Internal server error
  */
-export const getDeletedCustomers = async (req: Request, res: Response): Promise<any> => {
+export const getDeletedCustomers = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
-    const email = (req.query.email as string) || '';
+    const email = (req.query.email as string) || "";
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
     let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
-    let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+    let order: "ASC" | "DESC" =
+      orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
-
-    const query = customerRepo.createQueryBuilder('customer')
-      .where('customer.isDelete = :isDelete', { isDelete: true });
+    const query = customerRepo
+      .createQueryBuilder("customer")
+      .where("customer.isDelete = :isDelete", { isDelete: true });
 
     if (email) {
-      query.andWhere('customer.email LIKE :email', { email: `%${email}%` });
+      query.andWhere("customer.email LIKE :email", { email: `%${email}%` });
     }
 
     if (startDate) {
-      query.andWhere('customer.deletedAt >= :startDate', { startDate: new Date(startDate) });
+      query.andWhere("customer.deletedAt >= :startDate", {
+        startDate: new Date(startDate),
+      });
     }
 
     if (endDate) {
-      query.andWhere('customer.deletedAt <= :endDate', { endDate: new Date(endDate) });
+      query.andWhere("customer.deletedAt <= :endDate", {
+        endDate: new Date(endDate),
+      });
     }
 
     // Get total filtered count
     const [customers, total] = await query
-      .orderBy('customer.deletedAt', order)
+      .orderBy("customer.deletedAt", order)
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
@@ -724,7 +1002,7 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
   } catch (err) {
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: err instanceof Error ? err.message : err,
     });
   }
@@ -769,7 +1047,10 @@ export const getDeletedCustomers = async (req: Request, res: Response): Promise<
  *       500:
  *         description: Internal server error
  */
-export const updateCustomer = async (req: Request, res: Response): Promise<any> => {
+export const updateCustomer = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { id } = req.params;
     const { practiceArea } = req.body;
@@ -787,14 +1068,13 @@ export const updateCustomer = async (req: Request, res: Response): Promise<any> 
     return res.status(201).json({
       success: true,
       data: savedCustomer,
-      message: 'Customer updated successfully'
+      message: "Customer updated successfully",
     });
-
   } catch (error) {
-    console.error('Error updating customer:', error);
+    console.error("Error updating customer:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -826,23 +1106,26 @@ export const updateCustomer = async (req: Request, res: Response): Promise<any> 
  *       403:
  *         description: Access denied
  */
-export const getCustomerById = async (req: Request, res: Response): Promise<any> => {
+export const getCustomerById = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { id } = req.params;
     const userId = (req as any).user.id;
 
     // Find customer by ID
     const customer = await customerRepo.findOne({
-      where: { 
+      where: {
         id: +id,
-        isDelete: false
-      }
+        isDelete: false,
+      },
     });
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: "Customer not found"
+        message: "Customer not found",
       });
     }
 
@@ -852,7 +1135,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
     if (userRole !== "super_admin" && customer.createdByUserId !== userId) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. You can only view your own customers."
+        message: "Access denied. You can only view your own customers.",
       });
     }
 
@@ -877,20 +1160,19 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
       expiryDate: customer.expiryDate,
       isDelete: customer.isDelete,
       createdAt: customer.createdAt,
-      updatedAt: customer.updatedAt
+      updatedAt: customer.updatedAt,
     };
 
     return res.json({
       success: true,
       data: customerData,
-      message: 'Customer details retrieved successfully'
+      message: "Customer details retrieved successfully",
     });
-
   } catch (error) {
-    console.error('Error getting customer by ID:', error);
+    console.error("Error getting customer by ID:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -930,23 +1212,26 @@ export const getCustomerById = async (req: Request, res: Response): Promise<any>
  *       500:
  *         description: Internal server error
  */
-export const sendRegistrationEmail = async (req: Request, res: Response): Promise<any> => {
+export const sendRegistrationEmail = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { customerId } = req.params;
     const { loginUrl } = req.body; // Optional custom login URL
 
     // Find customer by ID
     const customer = await customerRepo.findOne({
-      where: { 
+      where: {
         id: +customerId,
-        isDelete: false
-      }
+        isDelete: false,
+      },
     });
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: "Customer not found"
+        message: "Customer not found",
       });
     }
 
@@ -956,25 +1241,28 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
     if (userRole !== "super_admin" && customer.createdByUserId !== userId) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. You can only send emails for your own customers."
+        message:
+          "Access denied. You can only send emails for your own customers.",
       });
     }
 
     // Prepare customer name
     const customerName = `${customer.firstName} ${customer.lastName}`;
-    
+
     // Send registration email
     const emailSent = await sendCompanyRegistrationEmail(
       customer.email,
       customerName,
       customer.businessName,
-      loginUrl || process.env.FRONTEND_LOGIN_URL || 'https://vhr-system.com/login'
+      loginUrl ||
+        process.env.FRONTEND_LOGIN_URL ||
+        "https://vhr-system.com/login"
     );
 
     if (!emailSent) {
       return res.status(500).json({
         success: false,
-        message: "Failed to send registration email. Please try again."
+        message: "Failed to send registration email. Please try again.",
       });
     }
 
@@ -986,15 +1274,14 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
         customerName: customerName,
         businessName: customer.businessName,
         email: customer.email,
-        sentAt: new Date()
-      }
+        sentAt: new Date(),
+      },
     });
-
   } catch (error) {
-    console.error('Error sending registration email:', error);
+    console.error("Error sending registration email:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -1038,9 +1325,11 @@ export const sendRegistrationEmail = async (req: Request, res: Response): Promis
  *                         type: integer
  *                         description: Number of active customers in that year
  */
-export const getActiveCustomersPerYear = async (req: Request, res: Response): Promise<any> => {
+export const getActiveCustomersPerYear = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
-
     // Query to get count of active customers grouped by year (ignores null createdAt)
     const result = await customerRepo
       .createQueryBuilder("customer")
@@ -1057,16 +1346,16 @@ export const getActiveCustomersPerYear = async (req: Request, res: Response): Pr
         currentYear: new Date().getFullYear(),
         activeCustomers: 0,
         percentageChange: 0,
-        yearlyData: []
+        yearlyData: [],
       });
     }
 
     // Convert safely
     const yearlyData = result
-      .filter(r => r.year && !isNaN(Number(r.year)))
-      .map(r => ({
+      .filter((r) => r.year && !isNaN(Number(r.year)))
+      .map((r) => ({
         year: Number(r.year),
-        count: Number(r.count)
+        count: Number(r.count),
       }))
       .sort((a, b) => a.year - b.year);
 
@@ -1077,19 +1366,21 @@ export const getActiveCustomersPerYear = async (req: Request, res: Response): Pr
     const prevCount = len > 1 ? yearlyData[len - 2].count : 0;
 
     const percentageChange =
-      prevCount > 0 ? Number((((currentCount - prevCount) / prevCount) * 100).toFixed(1)) : 0;
+      prevCount > 0
+        ? Number((((currentCount - prevCount) / prevCount) * 100).toFixed(1))
+        : 0;
 
     return res.json({
       currentYear,
       activeCustomers: currentCount,
       percentageChange,
-      yearlyData
+      yearlyData,
     });
   } catch (error) {
     console.error("Error in getActiveCustomersPerYear:", error);
     return res.status(500).json({
       message: "Error fetching active customers per year",
-      error
+      error,
     });
   }
 };
@@ -1146,38 +1437,63 @@ export const getActiveCustomersPerYear = async (req: Request, res: Response): Pr
  *       500:
  *         description: Internal server error
  */
-export const getTotalCustomersPerYear = async (req: Request, res: Response): Promise<any> => {
+export const getTotalCustomersPerYear = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     console.log("getTotalCustomersPerYear");
 
     const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | daily
     const currentYear = new Date().getFullYear();
     const compareYears = req.query.compareYears
-      ? (req.query.compareYears as string).split(",").map(y => Number(y.trim()))
+      ? (req.query.compareYears as string)
+          .split(",")
+          .map((y) => Number(y.trim()))
       : [currentYear];
 
-    const datasets: Record<number, { label: string; data: { x: string; y: number }[] }> = {};
+    const datasets: Record<
+      number,
+      { label: string; data: { x: string; y: number }[] }
+    > = {};
 
     // date range helpers
     const getStartOf = (unit: string, year: number = currentYear) => {
       const now = new Date();
       switch (unit) {
-        case "year": return new Date(year, 0, 1, 0, 0, 0);
-        case "month": return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        case "week": return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
-        case "day": return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        default: return new Date(year, 0, 1, 0, 0, 0);
+        case "year":
+          return new Date(year, 0, 1, 0, 0, 0);
+        case "month":
+          return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        case "week":
+          return new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 7,
+            0,
+            0,
+            0
+          );
+        case "day":
+          return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        default:
+          return new Date(year, 0, 1, 0, 0, 0);
       }
     };
 
     const getEndOf = (unit: string, year: number = currentYear) => {
       const now = new Date();
       switch (unit) {
-        case "year": return new Date(year, 11, 31, 23, 59, 59);
-        case "month": return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        case "week": return new Date();
-        case "day": return new Date();
-        default: return new Date(year, 11, 31, 23, 59, 59);
+        case "year":
+          return new Date(year, 11, 31, 23, 59, 59);
+        case "month":
+          return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        case "week":
+          return new Date();
+        case "day":
+          return new Date();
+        default:
+          return new Date(year, 11, 31, 23, 59, 59);
       }
     };
 
@@ -1223,7 +1539,10 @@ export const getTotalCustomersPerYear = async (req: Request, res: Response): Pro
         .addSelect("COUNT(*)", "count")
         .where("customer.isDelete = :isDelete", { isDelete: false })
         .andWhere("YEAR(customer.createdAt) = :year", { year })
-        .andWhere("customer.createdAt BETWEEN :startDate AND :endDate", { startDate, endDate })
+        .andWhere("customer.createdAt BETWEEN :startDate AND :endDate", {
+          startDate,
+          endDate,
+        })
         .groupBy(groupExpr)
         .orderBy(groupExpr, "ASC")
         .getRawMany();
@@ -1241,9 +1560,11 @@ export const getTotalCustomersPerYear = async (req: Request, res: Response): Pro
 
     // Compute totals and growth
     const latestYear = Math.max(...compareYears);
-    const total = datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const total =
+      datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
     const prevYear = latestYear - 1;
-    const prevTotal = datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const prevTotal =
+      datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
     const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
 
     return res.status(200).json({
@@ -1259,7 +1580,6 @@ export const getTotalCustomersPerYear = async (req: Request, res: Response): Pro
     });
   }
 };
-
 
 /**
  * @swagger
@@ -1324,7 +1644,10 @@ export const getTotalCustomersPerYear = async (req: Request, res: Response): Pro
  *                 error:
  *                   type: string
  */
-export const getRevenueTrend = async (req: Request, res: Response): Promise<any> => {
+export const getRevenueTrend = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     console.log("getRevenueTrend");
 
@@ -1332,31 +1655,53 @@ export const getRevenueTrend = async (req: Request, res: Response): Promise<any>
     const currentYear = new Date().getFullYear();
 
     const compareYears = req.query.compareYears
-      ? (req.query.compareYears as string).split(",").map(y => Number(y.trim()))
+      ? (req.query.compareYears as string)
+          .split(",")
+          .map((y) => Number(y.trim()))
       : [currentYear];
 
-    const datasets: Record<number, { label: string; data: { x: string; y: number }[] }> = {};
+    const datasets: Record<
+      number,
+      { label: string; data: { x: string; y: number }[] }
+    > = {};
 
     // 🧭 Helper functions for date ranges
     const getStartOf = (unit: string, year: number = currentYear) => {
       const now = new Date();
       switch (unit) {
-        case "year": return new Date(year, 0, 1, 0, 0, 0);
-        case "month": return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        case "week": return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
-        case "day": return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        default: return new Date(year, 0, 1, 0, 0, 0);
+        case "year":
+          return new Date(year, 0, 1, 0, 0, 0);
+        case "month":
+          return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        case "week":
+          return new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 7,
+            0,
+            0,
+            0
+          );
+        case "day":
+          return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        default:
+          return new Date(year, 0, 1, 0, 0, 0);
       }
     };
 
     const getEndOf = (unit: string, year: number = currentYear) => {
       const now = new Date();
       switch (unit) {
-        case "year": return new Date(year, 11, 31, 23, 59, 59);
-        case "month": return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        case "week": return new Date();
-        case "day": return new Date();
-        default: return new Date(year, 11, 31, 23, 59, 59);
+        case "year":
+          return new Date(year, 11, 31, 23, 59, 59);
+        case "month":
+          return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        case "week":
+          return new Date();
+        case "day":
+          return new Date();
+        default:
+          return new Date(year, 11, 31, 23, 59, 59);
       }
     };
 
@@ -1402,10 +1747,13 @@ export const getRevenueTrend = async (req: Request, res: Response): Promise<any>
         .where("transaction.isDeleted = :isDeleted", { isDeleted: false })
         .andWhere("transaction.status = :status", { status: "completed" })
         .andWhere("YEAR(transaction.transactionDate) = :year", { year })
-        .andWhere("transaction.transactionDate BETWEEN :startDate AND :endDate", {
-          startDate,
-          endDate,
-        })
+        .andWhere(
+          "transaction.transactionDate BETWEEN :startDate AND :endDate",
+          {
+            startDate,
+            endDate,
+          }
+        )
         .groupBy(groupExpr)
         .orderBy(groupExpr, "ASC")
         .getRawMany();
@@ -1423,9 +1771,11 @@ export const getRevenueTrend = async (req: Request, res: Response): Promise<any>
 
     // 📈 Totals & growth calculation
     const latestYear = Math.max(...compareYears);
-    const total = datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const total =
+      datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
     const prevYear = latestYear - 1;
-    const prevTotal = datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
+    const prevTotal =
+      datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
     const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
 
     return res.status(200).json({
@@ -1441,7 +1791,3 @@ export const getRevenueTrend = async (req: Request, res: Response): Promise<any>
     });
   }
 };
-
-
-
-
