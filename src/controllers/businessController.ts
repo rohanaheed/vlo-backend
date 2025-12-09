@@ -6,6 +6,7 @@ import { BusinessPracticeArea } from "../entity/BusinessPracticeArea";
 import { Subcategory } from "../entity/Subcategory";
 import { CustomField } from "../entity/CustomField";
 import { CustomfieldGroup } from "../entity/CustomfieldGroup";
+import { businessEntitySchema, businessPracticeAreaSchema, businessTypeSchema, subcategorySchema, updateSubcategorySchema } from "../utils/validators/inputValidator";
 
 const businessEntityRepo = AppDataSource.getRepository(BusinessEntity);
 const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
@@ -43,8 +44,21 @@ const customFieldGroupRepo = AppDataSource.getRepository(CustomfieldGroup);
  *         description: BusinessType already exists
  */
 export const createBusinessType = async (req: Request, res: Response): Promise<any> => {
-  const { name } = req.body;
-  const existing = await businessTypeRepo.findOneBy({ name });
+  const { error, value } = businessTypeSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.details[0].message,
+        });
+      }
+  
+  const name = value.name
+  const existing = await businessTypeRepo.findOne({ 
+    where : {
+      name,
+      isDelete : false
+    }
+   });
 
   if (existing) {
     return res.status(409).json({ message: "BusinessType already exists" });
@@ -215,7 +229,12 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
  */
 export const getBusinessTypeById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const type = await businessTypeRepo.findOneBy({ id: Number(id) });
+  const type = await businessTypeRepo.findOne({ 
+    where : {
+      id: Number(id),
+      isDelete : false
+    }
+     });
 
   if (!type) {
     return res.status(404).json({ message: "BusinessType not found" });
@@ -262,14 +281,29 @@ export const getBusinessTypeById = async (req: Request, res: Response): Promise<
  */
 export const updateBusinessType = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { name } = req.body;
+   const { error, value } = businessTypeSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.details[0].message,
+        });
+      }
+  
+  const name = value.name
 
-  const type = await businessTypeRepo.findOneBy({ id: Number(id) });
+  const type = await businessTypeRepo.findOne({ 
+    where : {
+      id: Number(id),
+      isDelete : false
+    }
+   });
 
   if (!type) {
     return res.status(404).json({ message: "BusinessType not found" });
   }
-
+  if(type.name === name){
+    return res.status(400).json({ message: "New name must be different from current name"})
+  }
   type.name = name;
   type.updatedAt = new Date();
   await businessTypeRepo.save(type);
@@ -345,9 +379,21 @@ export const deleteBusinessType = async (req: Request, res: Response): Promise<a
  *         description: BusinessEntity already exists
  */
 export const createBusinessEntity = async (req: Request, res: Response): Promise<any> => {
-  const { name } = req.body;
-
-  const existing = await businessEntityRepo.findOneBy({ name });
+  const {error,value} = businessEntitySchema.validate(req.body)
+  
+  if(error){
+    return res.status(400).json({
+      success:false,
+      message: error.details[0].message,
+    })
+  }
+  const name = value.name
+  const existing = await businessEntityRepo.findOne({
+    where : {
+      name,
+      isDelete : false
+    }
+  });
   if (existing) {
     return res.status(409).json({ message: "BusinessEntity already exists" });
   }
@@ -482,7 +528,12 @@ export const getAllBusinessEntities = async (req: Request, res: Response): Promi
  */
 export const getBusinessEntityById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const entity = await businessEntityRepo.findOneBy({ id: Number(id) });
+  const entity = await businessEntityRepo.findOne({ 
+    where : {
+      id: Number(id),
+      isDelete : false
+    }
+   });
 
   if (!entity) {
     return res.status(404).json({ message: "BusinessEntity not found" });
@@ -529,11 +580,25 @@ export const getBusinessEntityById = async (req: Request, res: Response): Promis
  */
 export const updateBusinessEntity = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { name } = req.body;
+  const {error,value} = businessEntitySchema.validate(req.body)
+  
+  if(error){
+    return res.status(400).json({
+      success:false,
+      message: error.details[0].message,
+    })
+  }
 
-  const entity = await businessEntityRepo.findOneBy({ id: Number(id) });
+  const name = value.name
+
+  const entity = await businessEntityRepo.findOne({ 
+    where: { id: Number(id), isDelete: false }
+   });
   if (!entity) {
     return res.status(404).json({ message: "BusinessEntity not found" });
+  }
+  if (entity.name === name) {
+    return res.status(400).json({ message: "New name must be different from current name" });
   }
 
   entity.name = name;
@@ -616,9 +681,21 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *         description: Already exists
  */
 export const createPracticeArea = async (req: Request, res: Response): Promise<any> => {
-  const { title, code } = req.body;
-
-  const existing = await practiceRepo.findOneBy({ title });
+  const {error,value} = businessPracticeAreaSchema.validate(req.body)
+  if(error){
+    return res.status(400).json({
+      success: false,
+      message: error.details[0].message
+    })
+  }
+  const title = value.title
+  const code = value.code
+  const existing = await practiceRepo.findOne({ 
+    where : {
+      title,
+      isDelete : false
+    }
+   });
   if (existing) {
     return res.status(409).json({ message: "Already exists" });
   }
@@ -799,8 +876,15 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  */
 export const updatePracticeArea = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { title, code } = req.body;
-
+  const {error,value} = businessPracticeAreaSchema.validate(req.body)
+  if(error){
+    return res.status(400).json({
+      success: false,
+      message: error.details[0].message
+    })
+  }
+  const title = value.title;
+  const code = value.code;
   const area = await practiceRepo.findOneBy({ id: Number(id), isDelete: false });
   if (!area) return res.status(404).json({ message: "Not found" });
 
@@ -916,8 +1000,15 @@ export const deletePracticeArea = async (req: Request, res: Response): Promise<a
  *         description: Already exists
  */
 export const createSubcategory = async (req: Request, res: Response): Promise<any> => {
-  const { title, BusinessPracticeAreaId } = req.body;
-
+  const {error,value} = subcategorySchema.validate(req.body)
+  if(error){
+    return res.status(400).json({
+      success: false,
+      message: error.details[0].message
+    })
+  }
+  const title = value.title;
+  const BusinessPracticeAreaId = value.BusinessPracticeAreaId;
   // Check for existing subcategory with same title and BusinessPracticeAreaId
   const existing = await subcategoryRepo.findOneBy({ title, BusinessPracticeAreaId, isDelete: false });
   if (existing) {
@@ -1099,15 +1190,24 @@ export const getSubcategoryById = async (req: Request, res: Response): Promise<a
  */
 export const updateSubcategory = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { title } = req.body;
+  const {error,value} = updateSubcategorySchema.validate(req.body)
+  if(error){
+    return res.status(400).json({
+      success: false,
+      message: error.details[0].message
+    })
+  }
+  const title = value.title;
 
   const subcategory = await subcategoryRepo.findOne({ where: { id: Number(id), isDelete: false } });
 
   if (!subcategory) {
     return res.status(404).json({ message: "Subcategory not found" });
   }
-
-  if (title !== undefined) subcategory.title = title;
+  if (subcategory.title === title) {
+    return res.status(400).json({ message: "New name must be different from current name" });
+  }
+  subcategory.title = title;
   subcategory.updatedAt = new Date();
 
   await subcategoryRepo.save(subcategory);
