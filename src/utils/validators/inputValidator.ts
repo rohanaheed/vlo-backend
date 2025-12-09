@@ -429,6 +429,7 @@ export const subcategorySchema = Joi.object({
 
 export const updateSubcategorySchema = Joi.object({
   title: Joi.string().min(2).max(100).required(),
+  BusinessPracticeAreaId: Joi.number().optional()
 });
 
 export const createCustomFieldGroupSchema = Joi.object({
