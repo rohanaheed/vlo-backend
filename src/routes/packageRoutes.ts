@@ -13,7 +13,10 @@ import {
   deletePackageModule,
   getAllPackageModules,
   getPackageModuleById,
-  updatePackageModule
+  updatePackageModule,
+  getPackagesForCustomer,
+  getCustomerSelectedPackageAddOns,
+  getCustomerSelectedPackage
 } from "../controllers/packageController";
 import { validateRequest } from "../middleware/validateRequest";
 import { packageSchema, updatePackageSchema, createPackageModuleSchema, updatePackageModuleSchema } from "../utils/validators/inputValidator";
@@ -58,6 +61,15 @@ router.get("/paid/list", authorize(["super_admin", "user"]), asyncHandler(getPai
 
 // Get packages by billing cycle
 router.get("/billing-cycle/:cycle", authorize(["super_admin", "user"]), asyncHandler(getPackagesByBillingCycle));
+
+// Get packages for customer
+router.get("/list/:customerId", authorize(["super_admin", "user"]), asyncHandler(getPackagesForCustomer));
+
+// Get customer selected package info
+router.get("/customer-package/:customerId", authorize(["super_admin", "user"]), asyncHandler(getCustomerSelectedPackage));
+
+// Get packages extra addons for customer
+router.get("/addons/:customerId", authorize(["super_admin", "user"]), asyncHandler(getCustomerSelectedPackageAddOns));
 
 // Package Module Routes
 
