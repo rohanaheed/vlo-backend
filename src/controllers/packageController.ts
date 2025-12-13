@@ -755,10 +755,14 @@ export const getPackagesByBillingCycle = async (req: Request, res: Response): Pr
 export const getPackagesForCustomer = async (req : Request, res: Response): Promise<any> => {
     try {
       const {customerId} = req.params
+      // Get Customer 
       const customer = await customerRepo.findOne({ where : { id : Number(customerId) } })
+      // Get Currency
       const currency = await currencyRepo.findOne( { where : { id : customer?.currencyId } } )
+      // Get Packages 
       const packages = await packageRepo.find({ where : { isActive : true, isDelete : false } })
-
+      
+      // Validate Customer, Currency and Packages Exist
       if(!customer){
         return res.status(404).json({
           success : false,
@@ -777,6 +781,7 @@ export const getPackagesForCustomer = async (req : Request, res: Response): Prom
           message : "No Package Found"
         })
       }
+      // Convert Package Prices based on Customer Currency
       const convertedPackages = packages.map((pkg => ({
         id : pkg.id,
         name : pkg.name,
@@ -802,6 +807,7 @@ export const getPackagesForCustomer = async (req : Request, res: Response): Prom
         communicationTools : pkg.communicationTools,
         cloudStorage : pkg.cloudStorage,
         socialMediaConnectors : pkg.socialMediaConnectors,
+        extraAddOns : pkg.extraAddOn,
         currency : currency.currencyCode,
         currencySymbol : currency.currencySymbol
       })))
@@ -816,14 +822,11 @@ export const getPackagesForCustomer = async (req : Request, res: Response): Prom
   }
 }
 
-export const getCustomerSelectedPackage = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
+export const getCustomerSelectedPackage = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId } = req.params;
 
-    // 1. Get Customer
+    // Get Customer
     const customer = await customerRepo.findOne({
       where: { id: Number(customerId) }
     });
@@ -835,7 +838,7 @@ export const getCustomerSelectedPackage = async (
       });
     }
 
-    // 2. Get Currency
+    // Get Currency
     const currency = await currencyRepo.findOne({
       where: { id: customer.currencyId }
     });
@@ -847,7 +850,7 @@ export const getCustomerSelectedPackage = async (
       });
     }
 
-    // 3. Get Package
+    // Get Package
     const pkg = await packageRepo.findOne({
       where: { id: customer.packageId }
     });
@@ -859,20 +862,13 @@ export const getCustomerSelectedPackage = async (
       });
     }
 
-    // 4. Convert Prices
+    // Convert Prices
     const selectedPackage = {
       id: pkg.id,
       name: pkg.name,
       billingCycle: pkg.billingCycle,
-
-      monthlyPrice: Number(
-        (pkg.priceMonthly * currency.exchangeRate).toFixed(2)
-      ),
-
-      yearlyPrice: Number(
-        (pkg.priceYearly * currency.exchangeRate).toFixed(2)
-      ),
-
+      monthlyPrice: Number((pkg.priceMonthly * currency.exchangeRate).toFixed(2)),
+      yearlyPrice: Number((pkg.priceYearly * currency.exchangeRate).toFixed(2)),
       currencyCode: currency.currencyCode,
       currencySymbol: currency.currencySymbol
     };
@@ -892,14 +888,11 @@ export const getCustomerSelectedPackage = async (
   }
 };
 
-export const getCustomerSelectedPackageAddOns = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
+export const getCustomerSelectedPackageAddOns = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId } = req.params;
 
-    // 1. Get Customer
+    // Get Customer
     const customer = await customerRepo.findOne({
       where: { id: Number(customerId) }
     });
@@ -911,7 +904,7 @@ export const getCustomerSelectedPackageAddOns = async (
       });
     }
 
-    // 2. Get Currency of Customer
+    // Get Currency of Customer
     const currency = await currencyRepo.findOne({
       where: { id: customer.currencyId }
     });
@@ -923,7 +916,7 @@ export const getCustomerSelectedPackageAddOns = async (
       });
     }
 
-    // 3. Get Selected Package
+    // Get Selected Package
     const packageSelected = await packageRepo.findOne({
       where: { id: customer.packageId }
     });
@@ -935,21 +928,14 @@ export const getCustomerSelectedPackageAddOns = async (
       });
     }
 
-    // 4. Convert Extra Add-Ons Prices
+    // Convert Extra Add-Ons Prices
     const convertedAddOns = (packageSelected.extraAddOn || []).map(addOn => ({
       module: addOn.module,
       feature: addOn.feature,
       description: addOn.description,
       discount: addOn.discount || 0,
-
-      monthlyPrice: Number(
-        ((addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2)
-      ),
-
-      yearlyPrice: Number(
-        ((addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2)
-      ),
-
+      monthlyPrice: Number((addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2),
+      yearlyPrice: Number((addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2),
       currencyCode: currency.currencyCode,
       currencySymbol: currency.currencySymbol
     }));
