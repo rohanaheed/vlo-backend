@@ -6,9 +6,6 @@ export class Currency {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ default: 0 })
-  customerId!: number;
-
   @Column({ default: "" })
   currencyCode!: string;
 
@@ -18,15 +15,18 @@ export class Currency {
   @Column({ default: "" })
   currencySymbol!: string;
 
-  @Column({ default: 1 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 1 })
   exchangeRate!: number;
 
   @Column({ default: false })
   isCrypto!: boolean;
-
-  @Column({ default: 0 })
+  
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 1 })
   USDPrice!: number;
 
+  @Column({ default: "" })
+  country!: string;
+  
   @UpdateDateColumn()
   updatedAt!: Date;
 
