@@ -110,7 +110,7 @@ export const createCurrency = async (req: Request, res: Response): Promise<any> 
 
     // Create currency instance
     const currency = new Currency();
-    currency.customerId = value.customerId;
+    currency.country = value.country;
     currency.currencyCode = value.currencyCode;
     currency.currencyName = value.currencyName;
     currency.currencySymbol = value.currencySymbol;
@@ -219,7 +219,6 @@ export const getAllCurrencies = async (req: Request, res: Response): Promise<any
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string;
-    const customerId = req.query.customerId as string;
     const isCrypto = req.query.isCrypto as string;
     const order = (req.query.order as string) || 'asc';
     const sortBy = (req.query.sortBy as string) || 'currencyName';
@@ -228,10 +227,6 @@ export const getAllCurrencies = async (req: Request, res: Response): Promise<any
 
     // Build where conditions
     const whereConditions: any = { isDelete: false };
-
-    if (customerId) {
-      whereConditions.customerId = parseInt(customerId);
-    }
 
     if (isCrypto !== undefined) {
       whereConditions.isCrypto = isCrypto === 'true';
@@ -687,13 +682,13 @@ export const bulkCreateCurrencies = async (req: Request, res: Response): Promise
 
         // Create currency
         const currency = new Currency();
-        currency.customerId = value.customerId;
+        currency.country = value.country
         currency.currencyCode = value.currencyCode;
         currency.currencyName = value.currencyName;
         currency.currencySymbol = value.currencySymbol;
         currency.exchangeRate = value.exchangeRate;
         currency.isCrypto = value.isCrypto;
-        currency.USDPrice = value.USDPrice;
+        // currency.USDPrice = value.USDPrice;
         currency.isDelete = false;
 
         const savedCurrency = await currencyRepo.save(currency);
