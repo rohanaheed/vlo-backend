@@ -80,6 +80,7 @@ export const packageSchema = Joi.object({
   status: Joi.number().integer().optional(),
   billingCycle: Joi.string().valid("Monthly", "Annual").optional(),
   isActive: Joi.boolean().optional(),
+  currencyId: Joi.number().integer().optional(),
   includedFeatures: Joi.array().items(
     Joi.object({
       name: Joi.string().required(),
@@ -827,7 +828,7 @@ export const bulkDeleteSchema = Joi.object({
 
 // Currency validation schemas
 export const currencySchema = Joi.object({
-  customerId: Joi.number().integer().min(0).required().default(0),
+  country: Joi.string().min(2).max(100).required(),
   currencyCode: Joi.string().min(2).max(10).required(),
   currencyName: Joi.string().min(2).max(100).required(),
   currencySymbol: Joi.string().min(1).max(10).required(),
@@ -837,6 +838,7 @@ export const currencySchema = Joi.object({
 });
 
 export const updateCurrencySchema = Joi.object({
+  country: Joi.string().min(2).max(100).optional(),
   currencyCode: Joi.string().min(2).max(10).optional(),
   currencyName: Joi.string().min(2).max(100).optional(),
   currencySymbol: Joi.string().min(1).max(10).optional(),
