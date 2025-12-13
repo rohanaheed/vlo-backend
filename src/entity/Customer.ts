@@ -4,7 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Index
+  Index,
 } from "typeorm";
 
 export type Status = "Active" | "Trial" | "License Expired" | "Free";
@@ -48,9 +48,10 @@ export class Customer {
 
   @Column({ default: "" })
   businessType!: string;
-
+  
   @Column({ type: "json", nullable: true })
-  businessAddress!: Record<string, any>;
+  businessAddress!: { buildingName: string; buildingNumber: string; street: string; town: string; 
+    city: string; postalCode: string; country: string; };
 
   @Column({default:""})
   businessWebsite! : string;
@@ -86,7 +87,13 @@ export class Customer {
   otpExpiry!: Date | null;
 
   @Column({default: false})
-  isEmailVerified!: boolean
+  isEmailVerified!: boolean;
+
+  @Column({ default: 0 })
+  currencyId!: number;
+
+  @Column({ default: 0 })
+  packageId!: number;
 
   @CreateDateColumn()
   expiryDate!: Date;
