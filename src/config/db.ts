@@ -42,6 +42,7 @@ import { EmailPerformance } from "../entity/EmailPerformance"
 import { SocialMediaPerformance } from "../entity/SocialMediaPerformance"
 import { SMSPerformance } from "../entity/SMSPerformance"
 import { GoogleAdsPerformance } from "../entity/GoogleAdsPerformance"
+import { CustomerAddOn } from "../entity/CustomerAddOn";
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -62,6 +63,7 @@ export const AppDataSource = new DataSource({
     Transaction,
     User,
     Customer,
+    CustomerAddOn,
     BusinessEntity,
     BusinessType,
     BusinessPracticeArea,
