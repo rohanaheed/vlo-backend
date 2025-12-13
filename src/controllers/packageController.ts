@@ -2,9 +2,13 @@ import { Request, Response } from "express";
 import { AppDataSource } from "../config/db";
 import { Package } from "../entity/Package";
 import { PackageModule } from "../entity/PackageModule";
+import { Customer } from "../entity/Customer";
+import { Currency } from "../entity/Currency";
 
 const packageRepo = AppDataSource.getRepository(Package);
 const packageModuleRepo = AppDataSource.getRepository(PackageModule);
+const customerRepo = AppDataSource.getRepository(Customer);
+const currencyRepo = AppDataSource.getRepository(Currency);
 
 /**
  * @openapi
@@ -200,6 +204,12 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   const existing = await packageRepo.findOneBy({ name });
   if (existing) {
     return res.status(409).json({ message: "Package with this name already exists" });
+  }
+
+  // Check if currency exist
+  const currency = await currencyRepo.findOne({ where: { id: currencyId } });
+  if (!currency) {
+    return res.status(404).json({ message: "Currency not found" });
   }
 
   const newPackage = packageRepo.create({
@@ -741,6 +751,224 @@ export const getPackagesByBillingCycle = async (req: Request, res: Response): Pr
   });
   return res.json(packages);
 };
+
+export const getPackagesForCustomer = async (req : Request, res: Response): Promise<any> => {
+    try {
+      const {customerId} = req.params
+      const customer = await customerRepo.findOne({ where : { id : Number(customerId) } })
+      const currency = await currencyRepo.findOne( { where : { id : customer?.currencyId } } )
+      const packages = await packageRepo.find({ where : { isActive : true, isDelete : false } })
+
+      if(!customer){
+        return res.status(404).json({
+          success : false,
+          message : "Customer Not Found"
+        })
+      }
+      if(!currency){
+        return res.status(404).json({
+          success : false,
+          message : "Currency Not Found"
+        })
+      }
+      if(!packages){
+        return res.status(404).json({
+          success : false,
+          message : "No Package Found"
+        })
+      }
+      const convertedPackages = packages.map((pkg => ({
+        id : pkg.id,
+        name : pkg.name,
+        type : pkg.type,
+        description : pkg.description,
+        seats : pkg.seats,
+        maxEmployee : pkg.maxEmployee,
+        storageSize : pkg.storageSize,
+        storageUnit : pkg.storageUnit,
+        isPrivate : pkg.isPrivate,
+        isRecommended : pkg.isRecommended,
+        priceMonthly : Number((pkg.priceMonthly * currency.exchangeRate).toFixed(2)),
+        priceYearly : Number((pkg.priceYearly * currency.exchangeRate).toFixed(2)),
+        discount : pkg.discount,
+        trialPeriod : pkg.trialPeriod,
+        trialMessage : pkg.trialMessage,
+        notificationBeforeDays : pkg.notificationBeforeDays,
+        status : pkg.status,
+        billingCycle : pkg.billingCycle,
+        isActive : pkg.isActive,
+        includedFeatures : pkg.includedFeatures,
+        integrations : pkg.integrations,
+        communicationTools : pkg.communicationTools,
+        cloudStorage : pkg.cloudStorage,
+        socialMediaConnectors : pkg.socialMediaConnectors,
+        currency : currency.currencyCode,
+        currencySymbol : currency.currencySymbol
+      })))
+
+      return res.status(201).json({
+        success : true,
+        data : convertedPackages,
+        message : "Packages Fetched Successfully for Customer"
+      })
+    } catch (err: any) {
+      return res.status(500).json({ message: "Server error", error: err.message });
+  }
+}
+
+export const getCustomerSelectedPackage = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { customerId } = req.params;
+
+    // 1. Get Customer
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId) }
+    });
+
+    if (!customer || !customer.packageId) {
+      return res.status(404).json({
+        success: false,
+        message: "Package not selected"
+      });
+    }
+
+    // 2. Get Currency
+    const currency = await currencyRepo.findOne({
+      where: { id: customer.currencyId }
+    });
+
+    if (!currency) {
+      return res.status(404).json({
+        success: false,
+        message: "Currency not found"
+      });
+    }
+
+    // 3. Get Package
+    const pkg = await packageRepo.findOne({
+      where: { id: customer.packageId }
+    });
+
+    if (!pkg) {
+      return res.status(404).json({
+        success: false,
+        message: "Package not found"
+      });
+    }
+
+    // 4. Convert Prices
+    const selectedPackage = {
+      id: pkg.id,
+      name: pkg.name,
+      billingCycle: pkg.billingCycle,
+
+      monthlyPrice: Number(
+        (pkg.priceMonthly * currency.exchangeRate).toFixed(2)
+      ),
+
+      yearlyPrice: Number(
+        (pkg.priceYearly * currency.exchangeRate).toFixed(2)
+      ),
+
+      currencyCode: currency.currencyCode,
+      currencySymbol: currency.currencySymbol
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: selectedPackage,
+      message: "Customer selected package fetched successfully"
+    });
+
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message
+    });
+  }
+};
+
+export const getCustomerSelectedPackageAddOns = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { customerId } = req.params;
+
+    // 1. Get Customer
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId) }
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer Not Found"
+      });
+    }
+
+    // 2. Get Currency of Customer
+    const currency = await currencyRepo.findOne({
+      where: { id: customer.currencyId }
+    });
+
+    if (!currency) {
+      return res.status(404).json({
+        success: false,
+        message: "Currency Not Found"
+      });
+    }
+
+    // 3. Get Selected Package
+    const packageSelected = await packageRepo.findOne({
+      where: { id: customer.packageId }
+    });
+
+    if (!packageSelected) {
+      return res.status(404).json({
+        success: false,
+        message: "Package Selected by Customer Not Found"
+      });
+    }
+
+    // 4. Convert Extra Add-Ons Prices
+    const convertedAddOns = (packageSelected.extraAddOn || []).map(addOn => ({
+      module: addOn.module,
+      feature: addOn.feature,
+      description: addOn.description,
+      discount: addOn.discount || 0,
+
+      monthlyPrice: Number(
+        ((addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2)
+      ),
+
+      yearlyPrice: Number(
+        ((addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2)
+      ),
+
+      currencyCode: currency.currencyCode,
+      currencySymbol: currency.currencySymbol
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: convertedAddOns,
+      message: "Extra Add-Ons fetched successfully"
+    });
+
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message
+    });
+  }
+};
+
 
 /**
  * @openapi
