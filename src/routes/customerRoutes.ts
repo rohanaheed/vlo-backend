@@ -12,7 +12,9 @@ import {
   getRevenueTrend,
   sendVerificationCode,
   verifyEmailCode,
-  checkCustomerExist
+  checkCustomerExist,
+  selectCustomerPackage,
+  selectedCustomerAddOns
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -24,10 +26,10 @@ const router = Router();
 router.post("/", authorize(["super_admin"]), validateRequest(customerSchema), asyncHandler(createCustomer));
 
 // Send Email Verification Code to Customer
-router.post("/send-email-verification-code", authorize(["super_admin"]), validateRequest(sendCodeSchema), asyncHandler(sendVerificationCode));
+router.post("/send-email-verification-code", authorize(["super_admin", "user"]), validateRequest(sendCodeSchema), asyncHandler(sendVerificationCode));
 
 // Verify Email Code
-router.post("/verify-verification-code", authorize(["super_admin"]), validateRequest(verifyOTPSchema), asyncHandler(verifyEmailCode));
+router.post("/verify-verification-code", authorize(["super_admin", "user"]), validateRequest(verifyOTPSchema), asyncHandler(verifyEmailCode));
 
 // Get active customers per year
 router.get("/active-per-year", authorize(["super_admin"]), asyncHandler(getActiveCustomersPerYear));
@@ -53,6 +55,12 @@ router.get("/:id", authorize(["super_admin", "user"]), asyncHandler(getCustomerB
 // Send registration email to customer
 router.post("/:customerId/send-registration-email", authorize(["super_admin", "user"]), validateRequest(registrationEmailSchema), asyncHandler(sendRegistrationEmail));
 
-router.post("/check-email", authorize(["super_admin"]), asyncHandler(checkCustomerExist));
+router.post("/check-email", authorize(["super_admin", "user"]), asyncHandler(checkCustomerExist));
+
+// Select Package
+router.put("/:customerId/select-package", authorize(["super_admin", "user"]), asyncHandler(selectCustomerPackage));
+
+// Select Add-Ons for Customer's Package
+router.post("/:customerId/select-package/:packageId/add-ons", authorize(["super_admin", "user"]), asyncHandler(selectedCustomerAddOns));
 
 export default router;
