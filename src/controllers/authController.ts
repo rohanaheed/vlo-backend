@@ -69,7 +69,7 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
     process.env.FRONTEND_VERIFY_EMAIL_URL || 'https://vhr-system.com/verify-email'
   );
 
-  const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1h" });
+  const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1d" });
 
   res.status(201).json({
     token,
@@ -132,7 +132,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
-  const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1h" });
+  const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "1d" });
 
   res.json({ token, user });
 };
@@ -339,7 +339,6 @@ export const resetPassword = async (req: Request, res: Response): Promise<any> =
  */
 export const verifyUser = async (req: Request, res: Response): Promise<any> => {
   const { email } = req.body;
-
   const userRepo = AppDataSource.getRepository(User);
   const user = await userRepo.findOne({ where: { email: email, isDelete: false } });
 
@@ -350,7 +349,6 @@ export const verifyUser = async (req: Request, res: Response): Promise<any> => {
   if (user.isVarified) {
     return res.status(400).json({ message: "User is already verified" });
   }
-
   // Update user verification status
   user.isVarified = true;
   user.updatedAt = new Date();
