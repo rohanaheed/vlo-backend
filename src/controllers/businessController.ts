@@ -301,9 +301,7 @@ export const updateBusinessType = async (req: Request, res: Response): Promise<a
   if (!type) {
     return res.status(404).json({ message: "BusinessType not found" });
   }
-  if(type.name === name){
-    return res.status(400).json({ message: "New name must be different from current name"})
-  }
+  
   type.name = name;
   type.updatedAt = new Date();
   await businessTypeRepo.save(type);
