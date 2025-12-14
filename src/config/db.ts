@@ -43,6 +43,7 @@ import { SocialMediaPerformance } from "../entity/SocialMediaPerformance"
 import { SMSPerformance } from "../entity/SMSPerformance"
 import { GoogleAdsPerformance } from "../entity/GoogleAdsPerformance"
 import { CustomerAddOn } from "../entity/CustomerAddOn";
+import { UserGroup } from "../entity/UserGroup";
 
 export const AppDataSource = new DataSource({
   type: "mysql",
@@ -96,6 +97,7 @@ export const AppDataSource = new DataSource({
     EmailPerformance,
     SocialMediaPerformance,
     SMSPerformance,
-    GoogleAdsPerformance
+    GoogleAdsPerformance,
+    UserGroup
   ]
 });
