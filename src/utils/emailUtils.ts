@@ -124,8 +124,8 @@ export const sendCompanyRegistrationEmail = async (
             </p>
             
             <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0;">
-              <h3 style="color: #333; margin: 0 0 15px 0;">Registration Details:</h3>
-              <ul style="margin: 0; padding-left: 20px; color: #555;">
+            <h3 style="color: #333; margin: 0 0 15px 0;">Registration Details:</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #555;">
                 <li><strong>Company Name:</strong> ${businessName}</li>
                 <li><strong>Subscription Plan:</strong> ${subscription}</li>
                 <li><strong>Registration Date:</strong> ${new Date().toLocaleDateString()}</li>
