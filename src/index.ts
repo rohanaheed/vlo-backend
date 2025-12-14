@@ -507,7 +507,7 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             id: { type: 'integer' },
-            customerId: { type: 'integer' },
+            country: { type: 'string', maxLength: 100 },
             currencyCode: { type: 'string', maxLength: 10 },
             currencyName: { type: 'string', maxLength: 100 },
             currencySymbol: { type: 'string', maxLength: 10 },
@@ -523,7 +523,7 @@ const swaggerOptions = {
           type: 'object',
           required: ['currencyCode', 'currencyName', 'currencySymbol'],
           properties: {
-            customerId: { type: 'integer', minimum: 0, default: 0 },
+            country: { type: 'string', minLength: 2, maxLength: 100 },
             currencyCode: { type: 'string', minLength: 2, maxLength: 10 },
             currencyName: { type: 'string', minLength: 2, maxLength: 100 },
             currencySymbol: { type: 'string', minLength: 1, maxLength: 10 },
@@ -535,7 +535,7 @@ const swaggerOptions = {
         CurrencyUpdateInput: {
           type: 'object',
           properties: {
-            customerId: { type: 'integer', minimum: 0 },
+            country: { type: 'string', maxLength: 100 },
             currencyCode: { type: 'string', minLength: 2, maxLength: 10 },
             currencyName: { type: 'string', minLength: 2, maxLength: 100 },
             currencySymbol: { type: 'string', minLength: 1, maxLength: 10 },
