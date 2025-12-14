@@ -15,7 +15,8 @@ import {
   selectCustomerPackage,
   selectCustomerAddOns,
   getCustomerOrderSummary,
-  getCustomerDashboardStats
+  getCustomerDashboardStats,
+  deleteCustomer
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -49,6 +50,9 @@ router.get("/stats", authorize(["super_admin"]), asyncHandler(getCustomerDashboa
 
 // Get all customers
 router.get("/all-customers", authorize(["super_admin"]), asyncHandler(getAllCustomers));
+
+// Delete Customer
+router.delete("/:id", authorize(["super_admin"]), asyncHandler(deleteCustomer));
 
 // Get only deleted customers (must be before :id)
 router.get("/deleted", authorize(["super_admin"]), asyncHandler(getDeletedCustomers));
