@@ -464,7 +464,7 @@ export const selectCustomerPackage = async (req: Request, res: Response): Promis
   }
 }
 
-export const selectedCustomerAddOns = async (req: Request, res: Response): Promise<any> => {
+export const selectCustomerAddOns = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId, packageId } = req.params;
     const { selectedAddOns } = req.body;
@@ -495,30 +495,42 @@ export const selectedCustomerAddOns = async (req: Request, res: Response): Promi
     // Allowed add-ons from package
     const allowedAddOns = pkg.extraAddOn || [];
 
+     const validAddOns: {
+      module?: string;
+      feature?: string;
+      monthlyPrice?: number;
+      yearlyPrice?: number;
+      discount?: number;
+      description?: string;
+    }[] = [];
+
     for (const addOn of selectedAddOns) {
       const valid = allowedAddOns.find(
-        a => a.module === addOn.module && a.feature === addOn.feature
+        (a) => a.module === addOn.module && a.feature === addOn.feature
       );
 
-      if (!valid) continue; // skip invalid add-ons
+      if (!valid) continue;
 
-      const customerAddOn = customerAddOnsRepo.create({
-        customerId: Number(customerId),
-        packageId: Number(packageId),
+      validAddOns.push({
         module: valid.module,
         feature: valid.feature || "",
         monthlyPrice: Number(valid.monthlyPrice || 0),
         yearlyPrice: Number(valid.yearlyPrice || 0),
         discount: Number(valid.discount || 0),
         description: valid.description || "",
-        isDelete: false
       });
-
-      await customerAddOnsRepo.save(customerAddOn);
     }
+    const customerAddOn = customerAddOnsRepo.create({
+      customerId: Number(customerId),
+      packageId: Number(packageId),
+      addOns: validAddOns,
+      isDelete: false,
+    })
+    await customerAddOnsRepo.save(customerAddOn);
 
     return res.status(201).json({
       success: true,
+      data : customerAddOn,
       message: "Customer add-ons saved successfully"
     });
 
@@ -530,6 +542,80 @@ export const selectedCustomerAddOns = async (req: Request, res: Response): Promi
     });
   }
 };
+
+export const getCustomerOrderSummary = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { customerId } = req.params
+
+    // Get Customer
+    const customer = await customerRepo.findOne({ where: { id: Number(customerId) } })
+    // Get Customer Currency
+    const currency = await currencyRepo.findOne({ where: { id: customer?.currencyId } })
+    // Get Customer Package
+    const customerPackage = await packageRepo.findOne({ where: { id: customer?.packageId } })
+    // Get Customer AddOns
+    const customerAddOns = await customerAddOnsRepo.find({ 
+     where: { 
+       customerId: Number(customerId), packageId: customerPackage?.id
+      } 
+   })
+  //  Validate Customer Data
+   if(!customer || !customerPackage){
+    return res.status(404).json({
+      success: false,
+      message: "Customer or Package not found"
+    });
+   }
+   if(!currency){
+    return res.status(404).json({
+      success: false,
+      message: "Currency not found"
+    });
+   }
+  if(!customerAddOns){
+    return res.status(404).json({
+      success: false,
+      message: "Customer AddOns not found"
+    });
+   }
+  //  Convert Prices
+  const convertedPackage = {
+    packageName : customerPackage.name,
+    priceMonthly: Number(customerPackage.priceMonthly * currency.exchangeRate).toFixed(2),
+    priceYearly: Number(customerPackage.priceYearly * currency.exchangeRate).toFixed(2),
+  }
+  const convertedAddOns = customerAddOns[0].addOns?.map((addOn => ({
+    module : addOn.module,
+    feature : addOn.feature,
+    description : addOn.description,
+    priceMonthly : (Number(addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2),
+    priceYearly : (Number(addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2),
+    discount : addOn.discount
+  })))
+
+  // Total Price
+  const addOnsMonthlyTotal = convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.priceMonthly), 0).toFixed(2);
+  const addOnsYearlyTotal = convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.priceYearly), 0).toFixed(2);
+  const totalPriceMonthly = (parseFloat(convertedPackage.priceMonthly) + parseFloat(addOnsMonthlyTotal)).toFixed(2);
+  const totalPriceYearly = (parseFloat(convertedPackage.priceYearly) + parseFloat(addOnsYearlyTotal)).toFixed(2);
+  return res.json({
+    success: true,
+    data: {
+        package: convertedPackage,
+        addOns: convertedAddOns,
+        addOnsMonthlyTotal,
+        addOnsYearlyTotal,
+        totalPriceMonthly,
+        totalPriceYearly,
+        currencyCode: currency.currencyCode,
+        currencySymbol: currency.currencySymbol
+    },
+    message: 'Customer order summary retrieved successfully'
+  });
+  } catch (error) {
+    
+  }
+}
 
 /**
  * @swagger
@@ -576,7 +662,6 @@ export const selectedCustomerAddOns = async (req: Request, res: Response): Promi
  *                 totalTrials:
  *                   type: integer
  */
-
 export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
   try {
     const { state, year, month } = req.query;
