@@ -14,7 +14,8 @@ import {
   verifyEmailCode,
   checkCustomerExist,
   selectCustomerPackage,
-  selectedCustomerAddOns
+  selectCustomerAddOns,
+  getCustomerOrderSummary
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -61,6 +62,8 @@ router.post("/check-email", authorize(["super_admin", "user"]), asyncHandler(che
 router.put("/:customerId/select-package", authorize(["super_admin", "user"]), asyncHandler(selectCustomerPackage));
 
 // Select Add-Ons for Customer's Package
-router.post("/:customerId/select-package/:packageId/add-ons", authorize(["super_admin", "user"]), asyncHandler(selectedCustomerAddOns));
+router.post("/:customerId/select-package/:packageId/add-ons", authorize(["super_admin", "user"]), asyncHandler(selectCustomerAddOns));
+
+router.get("/order-summary/:customerId", authorize(["super_admin", "user"]), asyncHandler(getCustomerOrderSummary));
 
 export default router;
