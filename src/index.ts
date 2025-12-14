@@ -23,6 +23,7 @@ import headsUpRoutes from "./routes/headsUpRoutes";
 import preSignupMatricRoutes from "./routes/preSignupMatricRoutes";
 import marketingRoutes from "./routes/marketingRoutes";
 import currencyRoutes from "./routes/currencyRoutes";
+import userGroupRoutes from "./routes/userGroupRoutes";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -543,6 +544,102 @@ const swaggerOptions = {
             isCrypto: { type: 'boolean' },
             USDPrice: { type: 'number', minimum: 0 }
           }
+        },
+        UserGroup: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            title: { type: 'string', maxLength: 100 },
+            description: { type: 'string', maxLength: 500 },
+            permissions: {
+              type: 'object',
+              properties: {
+                clientsAndMatter: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                consultations: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                accounts: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                receiptBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                contactBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                logBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                reports: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+              }
+            },
+            customPermissions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  module: { type: 'string' },
+                  level: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+                }
+              }
+            },
+            isActive: { type: 'boolean' },
+            isDelete: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        UserGroupInput: {
+          type: 'object',
+          required: ['title', 'permissions'],
+          properties: {
+            title: { type: 'string', minLength: 2, maxLength: 100 },
+            description: { type: 'string', maxLength: 500 },
+            permissions: {
+              type: 'object',
+              required: ['clientsAndMatter', 'consultations', 'accounts', 'receiptBook', 'contactBook', 'logBook', 'reports'],
+              properties: {
+                clientsAndMatter: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                consultations: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                accounts: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                receiptBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                contactBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                logBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                reports: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+              }
+            },
+            customPermissions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  module: { type: 'string' },
+                  level: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+                }
+              }
+            },
+            isActive: { type: 'boolean', default: true }
+          }
+        },
+        UserGroupUpdate: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', minLength: 2, maxLength: 100 },
+            description: { type: 'string', maxLength: 500 },
+            permissions: {
+              type: 'object',
+              properties: {
+                clientsAndMatter: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                consultations: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                accounts: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                receiptBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                contactBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                logBook: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] },
+                reports: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+              }
+            },
+            customPermissions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  module: { type: 'string' },
+                  level: { type: 'string', enum: ['Full Access', 'Access Denied', 'Data Entry', 'Read Only'] }
+                }
+              }
+            },
+            isActive: { type: 'boolean' }
+          }
         }
       },
       responses: {
@@ -617,6 +714,7 @@ app.use("/api/heads-up", headsUpRoutes);
 app.use("/api/pre-signup-metrics", preSignupMatricRoutes);
 app.use("/api/marketing", marketingRoutes);
 app.use("/api/currencies", currencyRoutes);
+app.use("/api/user-groups", userGroupRoutes);
 
 const PORT = process.env.PORT;
 

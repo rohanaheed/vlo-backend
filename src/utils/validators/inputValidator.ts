@@ -847,4 +847,51 @@ export const updateCurrencySchema = Joi.object({
   USDPrice: Joi.number().min(0).optional()
 });
 
+// Permission level values for UserGroup
+const permissionLevelValues = ["Full Access", "Access Denied", "Data Entry", "Read Only"];
 
+// Default permissions object schema for UserGroup
+const defaultPermissionsSchema = Joi.object({
+  clientsAndMatter: Joi.string().valid(...permissionLevelValues).required(),
+  consultations: Joi.string().valid(...permissionLevelValues).required(),
+  accounts: Joi.string().valid(...permissionLevelValues).required(),
+  receiptBook: Joi.string().valid(...permissionLevelValues).required(),
+  contactBook: Joi.string().valid(...permissionLevelValues).required(),
+  logBook: Joi.string().valid(...permissionLevelValues).required(),
+  reports: Joi.string().valid(...permissionLevelValues).required()
+});
+
+// Custom permission schema for dynamic modules
+const modulePermissionSchema = Joi.object({
+  module: Joi.string().min(2).max(100).required(),
+  level: Joi.string().valid(...permissionLevelValues).required()
+});
+
+// Create UserGroup schema
+export const userGroupSchema = Joi.object({
+  title: Joi.string().min(2).max(100).required(),
+  description: Joi.string().max(500).optional().allow(''),
+  permissions: defaultPermissionsSchema.required(),
+  customPermissions: Joi.array().items(modulePermissionSchema).optional(),
+  isActive: Joi.boolean().optional().default(true)
+});
+
+// Update UserGroup schema
+export const updateUserGroupSchema = Joi.object({
+  title: Joi.string().min(2).max(100).optional(),
+  description: Joi.string().max(500).optional().allow(''),
+  permissions: defaultPermissionsSchema.optional(),
+  customPermissions: Joi.array().items(modulePermissionSchema).optional(),
+  isActive: Joi.boolean().optional()
+});
+
+// Custom permission schema for adding to a group
+export const customPermissionSchema = Joi.object({
+  module: Joi.string().min(2).max(100).required(),
+  level: Joi.string().valid(...permissionLevelValues).required()
+});
+
+// User group assignment schema
+export const assignUserGroupSchema = Joi.object({
+  userGroupId: Joi.number().integer().positive().required()
+});
