@@ -1,7 +1,6 @@
 import { Router } from "express";
 import {
   createCustomer,
-  getCustomerStats,
   getAllCustomers,
   updateCustomer,
   getCustomerById,
@@ -15,7 +14,8 @@ import {
   checkCustomerExist,
   selectCustomerPackage,
   selectCustomerAddOns,
-  getCustomerOrderSummary
+  getCustomerOrderSummary,
+  getCustomerDashboardStats
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -41,11 +41,14 @@ router.get("/total-per-year", authorize(["super_admin"]), asyncHandler(getTotalC
 // Get revenue trend per year
 router.get("/revenue-trend", authorize(["super_admin"]), asyncHandler(getRevenueTrend));
 
+// Update customer by ID
 router.put("/:id", authorize(["super_admin"]), validateRequest(updateCustomerSchema), asyncHandler(updateCustomer));
 
-router.get("/stats", authorize(["super_admin"]), asyncHandler(getCustomerStats));
+// Get customer dashboard stats
+router.get("/stats", authorize(["super_admin"]), asyncHandler(getCustomerDashboardStats));
 
-router.get("/", authorize(["super_admin"]), asyncHandler(getAllCustomers));
+// Get all customers
+router.get("/all-customers", authorize(["super_admin"]), asyncHandler(getAllCustomers));
 
 // Get only deleted customers (must be before :id)
 router.get("/deleted", authorize(["super_admin"]), asyncHandler(getDeletedCustomers));
