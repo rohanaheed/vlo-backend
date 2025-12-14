@@ -23,6 +23,7 @@ import { Subscription } from "../entity/Subscription";
 import { Package } from "../entity/Package";
 import { Currency } from "../entity/Currency";
 import { CustomerAddOn } from "../entity/CustomerAddOn";
+import { MoreThan, In } from "typeorm";
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
@@ -662,324 +663,42 @@ export const getCustomerOrderSummary = async (req: Request, res: Response): Prom
  *                 totalTrials:
  *                   type: integer
  */
-export const getCustomerStats = async (req: Request, res: Response): Promise<any> => {
+export const getCustomerDashboardStats = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { state, year, month } = req.query;
+    const baseWhere = { isDelete: false };
 
-    // Normalize filters
-    const filters: Record<string, any> = {};
-    if (state && typeof state === "string" && state.trim() !== "") filters.state = state;
-    if (year && !isNaN(Number(year))) filters.year = Number(year);
-    if (month && !isNaN(Number(month))) filters.month = Number(month);
-
-    // Helper: get customer count grouped by year
-    const getCustomerCount = async (statusCondition?: string | string[]) => {
-      const qb = customerRepo
-        .createQueryBuilder("customer")
-        .select("YEAR(customer.createdAt)", "year")
-        .addSelect("COUNT(*)", "count")
-        .where("customer.isDelete = :isDelete", { isDelete: false });
-
-      if (filters.state) qb.andWhere("customer.status = :state", { state: filters.state });
-      if (filters.year) qb.andWhere("YEAR(customer.createdAt) = :year", { year: filters.year });
-      if (filters.month) qb.andWhere("MONTH(customer.createdAt) = :month", { month: filters.month });
-
-      if (statusCondition) {
-        if (Array.isArray(statusCondition)) {
-          qb.andWhere("customer.status IN (:...statuses)", { statuses: statusCondition });
-        } else {
-          qb.andWhere("customer.status = :status", { status: statusCondition });
-        }
-      }
-
-      return qb.groupBy("YEAR(customer.createdAt)").getRawMany();
-    };
-
-    // Helper: revenue queries
-    const getRevenue = async (type: "yearly" | "quarterly" | "monthly" | "weekly" | "last24h") => {
-      const params: any = {};
-      let dateFilter = "";
-      if (filters.year) {
-        dateFilter += " AND YEAR(createdAt) = :year";
-        params.year = filters.year;
-      }
-      if (filters.month) {
-        dateFilter += " AND MONTH(createdAt) = :month";
-        params.month = filters.month;
-      }
-
-      switch (type) {
-        case "yearly":
-          return transactionRepo.query(
-            `
-            SELECT YEAR(createdAt) AS year, COALESCE(SUM(amount), 0) AS netRevenue
-            FROM transaction
-            WHERE status = 'completed' AND isDeleted = false
-            ${dateFilter}
-            GROUP BY year
-            ORDER BY year ASC
-          `,
-            params
-          );
-        case "quarterly":
-          return transactionRepo.query(
-            `
-            SELECT YEAR(createdAt) AS year, QUARTER(createdAt) AS quarter, COALESCE(SUM(amount),0) AS netRevenue
-            FROM transaction
-            WHERE status = 'completed' AND isDeleted = false
-            ${dateFilter}
-            GROUP BY year, quarter
-            ORDER BY year ASC, quarter ASC
-          `,
-            params
-          );
-        case "monthly":
-          return transactionRepo.query(
-            `
-            SELECT YEAR(createdAt) AS year, MONTH(createdAt) AS month, COALESCE(SUM(amount),0) AS netRevenue
-            FROM transaction
-            WHERE status = 'completed' AND isDeleted = false
-            ${dateFilter}
-            GROUP BY year, month
-            ORDER BY year ASC, month ASC
-          `,
-            params
-          );
-        case "weekly":
-          return transactionRepo.query(
-            `
-            SELECT YEAR(createdAt) AS year, WEEK(createdAt) AS week, COALESCE(SUM(amount),0) AS netRevenue
-            FROM transaction
-            WHERE status = 'completed' AND isDeleted = false
-            ${dateFilter}
-            GROUP BY year, week
-            ORDER BY year ASC, week ASC
-          `,
-            params
-          );
-        case "last24h":
-          return transactionRepo.query(
-            `
-            SELECT COALESCE(SUM(amount), 0) AS netRevenue
-            FROM transaction
-            WHERE status = 'completed' AND isDeleted = false
-              AND createdAt >= NOW() - INTERVAL 1 DAY
-          `
-          );
-      }
-    };
-
-    // Fetch all counts and revenue in parallel
     const [
-      allCustomers,
+      totalCustomers,
       activeCustomers,
-      licenseExpiredCustomers,
       inactiveCustomers,
+      licenseExpired,
       totalTrials,
-      yearlyRevenue,
-      quarterlyRevenue,
-      monthlyRevenue,
-      weeklyRevenue,
-      last24hRevenue,
+      totalSubscriptions,
     ] = await Promise.all([
-      getCustomerCount(), // all customers
-      getCustomerCount("Active"),
-      getCustomerCount("License Expired"),
-      getCustomerCount(["Trial", "Free", "License Expired"]),
-      getCustomerCount("Trial"),
-      getRevenue("yearly"),
-      getRevenue("quarterly"),
-      getRevenue("monthly"),
-      getRevenue("weekly"),
-      getRevenue("last24h"),
+      customerRepo.count({ where: baseWhere }),
+      customerRepo.count({ where: { ...baseWhere, status: "Active" } }),
+      customerRepo.count({ where: { ...baseWhere, status: "Inactive" } }),
+      customerRepo.count({ where: { ...baseWhere, status: "License Expired" } }),
+      customerRepo.count({ where: { ...baseWhere, status: "Trial" } }),
+      subscriptionRepo.count({ where: { isDelete: false } }),
     ]);
 
     return res.json({
-      totalCustomers: allCustomers,
+      totalCustomers,
       activeCustomers,
-      licenseExpiredCustomers,
       inactiveCustomers,
+      licenseExpired,
       totalTrials,
-      netRevenue: {
-        yearly: yearlyRevenue,
-        quarterly: quarterlyRevenue,
-        monthly: monthlyRevenue,
-        weekly: weeklyRevenue,
-        last24h: last24hRevenue?.[0]?.netRevenue || 0,
-      },
+      totalSubscriptions,
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Error fetching customer stats" });
+    console.error("Error getting customer stats:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
-
-// export const getCustomerStats = async (
-//   req: Request,
-//   res: Response
-// ): Promise<any> => {
-//   try {
-//     const { state, year, month } = req.query;
-
-//     // ✅ Normalize filters
-//     const filters: Record<string, any> = {};
-//     if (state && typeof state === "string" && state.trim() !== "")
-//       filters.state = state;
-//     if (year && !isNaN(Number(year))) filters.year = Number(year);
-//     if (month && !isNaN(Number(month))) filters.month = Number(month);
-
-//     // ✅ Helper: apply filters to QueryBuilder
-//     const applyCustomerFilters = (qb: any, alias: string) => {
-//       qb.andWhere(`${alias}.isDelete = :isDelete`, { isDelete: false });
-//       if (filters.state)
-//         qb.andWhere(`${alias}.status = :state`, { state: filters.state });
-//       if (filters.year)
-//         qb.andWhere(`YEAR(${alias}.createdAt) = :year`, { year: filters.year });
-//       if (filters.month)
-//         qb.andWhere(`MONTH(${alias}.createdAt) = :month`, {
-//           month: filters.month,
-//         });
-//     };
-
-//     // ✅ Helper: group customers by year
-//     const groupByYear = (items: { createdAt?: Date | null }[] = []) => {
-//       if (!Array.isArray(items)) return {};
-//       return items.reduce((acc: Record<string, number>, item) => {
-//         if (!item?.createdAt) return acc;
-//         const year = new Date(item.createdAt).getFullYear();
-//         if (!isNaN(year)) acc[year] = (acc[year] || 0) + 1;
-//         return acc;
-//       }, {});
-//     };
-
-//     // ✅ Helper: common customer query builder
-//     const makeCustomerQuery = (statusCondition?: string | string[]) => {
-//       const qb = customerRepo
-//         .createQueryBuilder("customer")
-//         .select(["customer.createdAt"]);
-//       applyCustomerFilters(qb, "customer");
-//       if (statusCondition) {
-//         if (Array.isArray(statusCondition)) {
-//           qb.andWhere("customer.status IN (:...statuses)", {
-//             statuses: statusCondition,
-//           });
-//         } else {
-//           qb.andWhere("customer.status = :status", { status: statusCondition });
-//         }
-//       }
-//       return qb.getMany();
-//     };
-
-//     // ✅ Fetch all data in parallel for performance
-//     const [
-//       allCustomers,
-//       activeCustomersArr,
-//       licenseExpiredCustomersArr,
-//       inactiveCustomersArr,
-//       totalTrialsArr,
-//       revenueStats,
-//     ] = await Promise.all([
-//       makeCustomerQuery(), // all
-//       makeCustomerQuery("Active"),
-//       makeCustomerQuery("License Expired"),
-//       makeCustomerQuery(["Trial", "Free", "License Expired"]),
-//       makeCustomerQuery("Trial"),
-
-//       // ✅ Revenue stats (with filters + isDelete)
-//       Promise.all([
-//         // Yearly
-//         transactionRepo.query(`
-//           SELECT 
-//             YEAR(createdAt) AS year, 
-//             COALESCE(SUM(amount), 0) AS netRevenue
-//           FROM transaction
-//           WHERE status = 'completed'
-//           AND isDeleted = false
-//           ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
-//           ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
-//           GROUP BY year
-//           ORDER BY year ASC
-//         `),
-
-//         // Quarterly
-//         transactionRepo.query(`
-//           SELECT 
-//             YEAR(createdAt) AS year,
-//             QUARTER(createdAt) AS quarter,
-//             COALESCE(SUM(amount), 0) AS netRevenue
-//           FROM transaction
-//           WHERE status = 'completed'
-//           AND isDeleted = false
-//           ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
-//           ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
-//           GROUP BY year, quarter
-//           ORDER BY year ASC, quarter ASC
-//         `),
-
-//         // Monthly
-//         transactionRepo.query(`
-//           SELECT 
-//             YEAR(createdAt) AS year,
-//             MONTH(createdAt) AS month,
-//             COALESCE(SUM(amount), 0) AS netRevenue
-//           FROM transaction
-//           WHERE status = 'completed'
-//           AND isDeleted = false
-//           ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
-//           ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
-//           GROUP BY year, month
-//           ORDER BY year ASC, month ASC
-//         `),
-
-//         // Weekly
-//         transactionRepo.query(`
-//           SELECT 
-//             YEAR(createdAt) AS year,
-//             WEEK(createdAt) AS week,
-//             COALESCE(SUM(amount), 0) AS netRevenue
-//           FROM transaction
-//           WHERE status = 'completed'
-//           AND isDeleted = false
-//           ${filters.year ? `AND YEAR(createdAt) = ${filters.year}` : ""}
-//           ${filters.month ? `AND MONTH(createdAt) = ${filters.month}` : ""}
-//           GROUP BY year, week
-//           ORDER BY year ASC, week ASC
-//         `),
-
-//         // Last 24 hours
-//         transactionRepo.query(`
-//           SELECT 
-//             COALESCE(SUM(amount), 0) AS netRevenue
-//           FROM transaction
-//           WHERE status = 'completed'
-//           AND isDeleted = false
-//           AND createdAt >= NOW() - INTERVAL 1 DAY
-//         `),
-//       ]),
-//     ]);
-
-//     // ✅ Response
-//     return res.json({
-//       totalCustomers: groupByYear(allCustomers),
-//       activeCustomers: groupByYear(activeCustomersArr),
-//       licenseExpiredCustomers: groupByYear(licenseExpiredCustomersArr),
-//       inactiveCustomers: groupByYear(inactiveCustomersArr),
-//       totalTrials: groupByYear(totalTrialsArr),
-//       netRevenue: {
-//         yearly: revenueStats[0],
-//         quarterly: revenueStats[1],
-//         monthly: revenueStats[2],
-//         weekly: revenueStats[3],
-//         last24h: revenueStats[4]?.[0]?.netRevenue || 0,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in getCustomerStats:", error);
-//     return res
-//       .status(500)
-//       .json({ message: "Error fetching customer stats", error });
-//   }
-// };
 
 /**
  * @swagger
@@ -1083,18 +802,17 @@ export const getCustomerStats = async (req: Request, res: Response): Promise<any
  *                 totalItems:
  *                   type: integer
  */
-export const getAllCustomers = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
-  const page = parseInt(req.query.page as string) || 1;
+export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
-  let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
-  let order: "ASC" | "DESC" =
-    orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+
+  const sortBy = (req.query.sortBy as string) || "createdAt"; // createdAt | expiryDate | lastActive
+  const orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+  const order: "ASC" | "DESC" = orderParam === "desc" || orderParam === "dsc" ? "DESC" : "ASC";
 
   const email = (req.query.email as string) || "";
-  const id = req.query.id as number | undefined;
+  const id = req.query.id ? Number(req.query.id) : undefined;
   const stage = req.query.stage as string | undefined;
   const type = req.query.type as string | undefined;
   const churnRisk = req.query.churnRisk as string | undefined;
@@ -1102,138 +820,118 @@ export const getAllCustomers = async (
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
-  // Use QueryBuilder for optimized full text search and filtering
   let qb = customerRepo
     .createQueryBuilder("customer")
-    .where("customer.isDelete = :isDelete", { isDelete: false });
+    .where("customer.isDelete = false");
 
   if (email) {
     qb.andWhere("customer.email LIKE :email", { email: `%${email}%` });
   }
-  if (id) {
-    const numericId = Number(id);
-    if (!isNaN(numericId) && Number.isFinite(numericId)) {
-      qb.andWhere("customer.id = :id", { id: numericId });
-    }
-  }
-  if (stage && stage.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.stage) LIKE :stageFilter", {
-      stageFilter: `%${stage.toLowerCase()}%`,
-    });
-  }
-  if (type && type.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.businessType) LIKE :typeFilter", {
-      typeFilter: `%${type.toLowerCase()}%`,
-    });
-  }
-  if (typeof churnRisk === "string" && churnRisk.trim() !== "") {
-    qb = qb.andWhere("LOWER(customer.churnRisk) LIKE :churnRiskFilter", {
-      churnRiskFilter: `%${churnRisk.toLowerCase()}%`,
-    });
-  }
-  if (startDate && endDate) {
-    qb = qb.andWhere("customer.createdAt BETWEEN :startDate AND :endDate", {
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-    });
-  }
-  if (startDate) {
-    qb = qb.andWhere("customer.createdAt >= :startDate", {
-      startDate: new Date(startDate),
-    });
-  }
-  if (endDate) {
-    qb = qb.andWhere("customer.createdAt <= :endDate", {
-      endDate: new Date(endDate),
-    });
-  }
-  // if (status) {
-  //   // Status is an enum field, so use exact match instead of LIKE
-  //   qb = qb.andWhere("customer.status = :statusFilter", { statusFilter: status });
-  // }
 
-  // Use QueryBuilder for paginated, filtered, and ordered results
+  if (id && !isNaN(id)) {
+    qb.andWhere("customer.id = :id", { id });
+  }
+
+  if (stage) {
+    qb.andWhere("customer.stage = :stage", { stage });
+  }
+
+  if (type) {
+    qb.andWhere("customer.businessType = :type", { type });
+  }
+
+  if (churnRisk) {
+    qb.andWhere("customer.churnRisk = :churnRisk", { churnRisk });
+  }
+
+  if (status) {
+    qb.andWhere("customer.status = :status", { status });
+  }
+
+  if (startDate && endDate) {
+    qb.andWhere("customer.createdAt BETWEEN :start AND :end", {
+      start: new Date(startDate),
+      end: new Date(endDate),
+    });
+  }
+
   const [customers, total] = await qb
-    .orderBy("customer.createdAt", order)
+    .orderBy(`customer.${sortBy}`, order)
     .skip((page - 1) * limit)
     .take(limit)
     .getManyAndCount();
 
-  // Get all subscriptions for these customers in one query
+  // Subscriptions
   const customerIds = customers.map((c) => c.id);
-  let subscriptions: any[] = [];
-  if (customerIds.length > 0) {
-    subscriptions = await subscriptionRepo
-      .createQueryBuilder("subscription")
-      .where("subscription.customerId IN (:...customerIds)", { customerIds })
-      .andWhere("subscription.isDelete = :isDelete", { isDelete: false })
-      .getMany();
-  }
+  const subscriptions = customerIds.length
+    ? await subscriptionRepo.find({
+        where: { customerId: In(customerIds), isDelete: false },
+      })
+    : [];
 
-  let packages: any[] = [];
-  // Get all packageIds from subscriptions
-  const packageIds = subscriptions.map((s: any) => s.packageId);
-  if (packageIds.length > 0) {
-    packages = await packageRepo
-      .createQueryBuilder("package")
-      .select([
-        "package.id",
-        "package.name",
-        "package.type",
-        "package.priceMonthly",
-        "package.priceYearly",
-      ])
-      .where("package.id IN (:...packageIds)", { packageIds })
-      .getMany()
-      .then((pkgs) =>
-        pkgs.map((pkg) => ({
-          id: pkg.id,
-          name: pkg.name,
-          type: pkg.type,
-          price: {
-            monthly: pkg.priceMonthly,
-            yearly: pkg.priceYearly,
-          },
-        }))
-      );
-  }
+  const packageIds = subscriptions.map((s) => s.packageId);
+  const packages = packageIds.length
+    ? await packageRepo.findBy({ id: In(packageIds) })
+    : [];
 
-  // Map for quick lookup
   const subscriptionMap = new Map();
-  subscriptions.forEach((sub: any) => {
-    subscriptionMap.set(sub.customerId, sub);
-  });
+  subscriptions.forEach((s) => subscriptionMap.set(s.customerId, s));
 
   const packageMap = new Map();
-  packages.forEach((pkg: any) => {
-    packageMap.set(pkg.id, pkg);
-  });
+  packages.forEach((p) => packageMap.set(p.id, p));
 
-  // Attach package details to each customer
-  const customersWithPackage = customers.map((customer) => {
+  const data = customers.map((customer) => {
     const subscription = subscriptionMap.get(customer.id);
-    let packageDetails = null;
-    if (subscription) {
-      packageDetails = packageMap.get(subscription.packageId) || null;
-    }
+    const pkg = subscription
+      ? packageMap.get(subscription.packageId)
+      : null;
+
     return {
       ...customer,
-      package: packageDetails,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            status: subscription.status,
+            billingCycle: subscription.billingCycle,
+            price: subscription.amount,
+            isPaid: subscription.isPaid,
+          }
+        : null,
+      package: pkg
+        ? {
+            id: pkg.id,
+            name: pkg.name,
+            type: pkg.type,
+            price: {
+              monthly: pkg.priceMonthly,
+              yearly: pkg.priceYearly,
+            },
+          }
+        : null,
     };
   });
 
-  // Get total count of all customers (not paginated)
-  const totalCount = await customerRepo.count();
+  const totalCount = await customerRepo.count({
+    where: { isDelete: false },
+  });
 
   return res.json({
-    data: customersWithPackage,
+    data,
     page,
     limit,
     totalPages: Math.ceil(total / limit),
     totalItems: total,
-    totalCount: totalCount,
+    totalCount,
   });
+  } catch (error) {
+   console.error("Error getting all customer:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    }); 
+  }
 };
+
 
 /**
  * @swagger
@@ -1409,7 +1107,7 @@ export const updateCustomer = async (
         message: error.details[0].message
       })
     }
-    const customer = await customerRepo.findOne({ where: { id: +id } });
+    const customer = await customerRepo.findOne({ where: { id: +id, isDelete: false } });
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
@@ -1433,6 +1131,32 @@ export const updateCustomer = async (
     });
   }
 };
+
+export const deleteCustomer = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+
+    const customer = await customerRepo.findOne({ where: { id: +id, isDelete: false } });
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    customer.isDelete = true;
+    customer.deletedAt = new Date();
+    await customerRepo.save(customer);
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting customer:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
 
 /**
  * @openapi
