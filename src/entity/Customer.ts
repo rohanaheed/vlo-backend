@@ -7,7 +7,7 @@ import {
   Index,
 } from "typeorm";
 
-export type Status = "Active" | "Trial" | "License Expired" | "Free";
+export type Status = "Active" | "Trial" | "License Expired" | "Free" | "Inactive";
 
 @Index("idx_customer_stage_fulltext", ["stage"], { fulltext: true })
 @Index("idx_customer_churnRisk_fulltext", ["churnRisk"], { fulltext: true })
@@ -77,7 +77,7 @@ export class Customer {
   @Column("simple-array", { default: "" })
   practiceArea!: string[];
 
-  @Column({ type: "enum", enum: ["Active", "Trial", "License Expired", "Free"], default: "Free" })
+  @Column({ type: "enum", enum: ["Active", "Trial", "License Expired", "Free", "Inactive"], default: "Free" })
   status!: Status;
 
   @Column({ nullable: true, type: "varchar", default: null })
