@@ -14,6 +14,7 @@ import {
   generateOTP,
   sendCompanyRegistrationEmail,
   sendCustomerEmailVerificationCode,
+  sendCustomerLoginCredentials,
   sendVerificationEmail,
 } from "../utils/emailUtils";
 import { UserRole } from "../entity/User";
@@ -63,6 +64,7 @@ export const createCustomer = async (
 ): Promise<any> => {
   try {
     const userId = (req as any).user.id;
+    const sendLoginCreds = req.body.sendEmail
 
     // Validate request body
     const { error, value } = customerSchema.validate(req.body);
@@ -214,6 +216,21 @@ export const createCustomer = async (
       console.warn(
         `Failed to send registration email to ${savedCustomer.email}`
       );
+    }
+    if(sendLoginCreds){
+      const userName = `${value.firstName} ${value.lastName}`;
+      const email = value.email.trim();
+      const password = value.password
+      const loginCredsEmail = await sendCustomerLoginCredentials(
+        email,
+        userName,
+        password
+      );
+      if(!loginCredsEmail){
+        console.warn(
+        `Failed to send crendentials email to ${savedCustomer.email}`
+      );
+      }
     }
 
     return res.status(201).json({
@@ -1140,10 +1157,20 @@ export const deleteCustomer = async (req: Request, res: Response): Promise<any> 
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
+    
 
     customer.isDelete = true;
     customer.deletedAt = new Date();
     await customerRepo.save(customer);
+
+    const user = await userRepo.findOne({
+      where: { email: customer.email, isDelete: false },
+    });
+
+    if (user) {
+      user.isDelete = true;
+      await userRepo.save(user);
+    }
 
     return res.status(200).json({
       success: true,

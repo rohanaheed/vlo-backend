@@ -307,3 +307,61 @@ export const sendCustomerEmailVerificationCode = async (
     return false;
   }
 };
+
+export const sendCustomerLoginCredentials = async (
+  email: string,
+  userName: string,
+  password: string
+): Promise<boolean> => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Your VHR System Login Credentials',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🔑 Login Credentials</h1>
+            <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px;">Welcome to VHR System</p>
+          </div>
+
+          <div style="padding: 30px; background-color: #ffffff;">
+            <p style="font-size: 18px; color: #333; margin-bottom: 20px;">Hello ${userName},</p>
+            
+            <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 20px;">
+              Your account has been created successfully. You can use the following credentials to log in:
+            </p>
+
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <p><strong>Username:</strong> ${userName}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Password:</strong> ${password}</p>
+            </div>
+
+            <p style="font-size: 16px; color: #555; line-height: 1.6;">
+              You can now <a href="https://vhr-system.com/login" style="color: #667eea;">log in to your account</a>.
+            </p>
+
+            <p style="font-size: 16px; color: #333; margin-bottom: 5px;">Best regards,</p>
+            <p style="font-size: 16px; color: #333; margin: 0;">The VHR Team</p>
+          </div>
+
+          <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
+            <p style="margin: 0; color: #666; font-size: 14px;">
+              This is an automated email. Please do not reply to this message.
+            </p>
+            <p style="margin: 10px 0 0 0; color: #666; font-size: 12px;">
+              © 2024 VHR System. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Error sending login credentials email:', error);
+    return false;
+  }
+};
