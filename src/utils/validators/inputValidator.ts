@@ -42,6 +42,7 @@ export const customerSchema = Joi.object({
   expirayDate: Joi.date().iso().optional(),
   lastActive: Joi.date().iso().optional(),
   isDelete: Joi.boolean().optional().default(false),
+  sendEmail: Joi.boolean().optional().default(false),
 });
 
 export const updateCustomerSchema = Joi.object({

@@ -64,7 +64,6 @@ export const createCustomer = async (
 ): Promise<any> => {
   try {
     const userId = (req as any).user.id;
-    const sendLoginCreds = req.body.sendEmail
 
     // Validate request body
     const { error, value } = customerSchema.validate(req.body);
@@ -75,6 +74,7 @@ export const createCustomer = async (
       });
     }
     const email = value.email.trim();
+    const sendLoginCreds = value.sendEmail;
     // Check if a verified customer already exists
     const existingCustomer = await customerRepo.findOne({
       where: { email, isDelete: false },
