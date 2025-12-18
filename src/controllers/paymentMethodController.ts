@@ -3,7 +3,9 @@ import { AppDataSource } from "../config/db";
 import { PaymentMethod } from "../entity/PaymentMethod";
 import * as crypto from 'crypto';
 const algorithm = 'aes-256-cbc';
-const secretKey = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long!!';
+const secretKeyString = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long!!';
+// Ensure key is exactly 32 bytes for AES-256
+const secretKey = crypto.createHash('sha256').update(secretKeyString).digest();
 
 const paymentRepo = AppDataSource.getRepository(PaymentMethod);
 
