@@ -31,7 +31,7 @@ export class User {
   @Column({ default: false })
   isDelete!: boolean;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: "int" })
   userGroupId!: number | null;
 
   @CreateDateColumn()

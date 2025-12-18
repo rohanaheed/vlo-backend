@@ -24,7 +24,12 @@ import {
   deleteCustomFieldGroup,
   updateCustomFieldGroup,
   getCustomFieldGroupById,
-  getAllCustomFieldGroups
+  getAllCustomFieldGroups,
+  createCustomField,
+  getAllCustomFields,
+  getCustomFieldById,
+  updateCustomField,
+  deleteCustomField
 } from "../controllers/businessController";
 import { validateRequest } from "../middleware/validateRequest";
 import {
@@ -156,5 +161,14 @@ router.get("/customfieldgroup/", authorize(["super_admin"]), asyncHandler(getAll
 router.get("/customfieldgroup/:id", authorize(["super_admin"]), asyncHandler(getCustomFieldGroupById));
 router.put("/customfieldgroup/:id", authorize(["super_admin"]), validateRequest(updateCustomFieldGroupSchema), asyncHandler(updateCustomFieldGroup));
 router.delete("/customfieldgroup/:id", authorize(["super_admin"]), asyncHandler(deleteCustomFieldGroup));
+
+/**
+ * Routes for custom fields
+ */
+router.post("/customfield/", authorize(["super_admin"]), asyncHandler(createCustomField));
+router.get("/customfield/", authorize(["super_admin"]), asyncHandler(getAllCustomFields));
+router.get("/customfield/:id", authorize(["super_admin"]), asyncHandler(getCustomFieldById));
+router.put("/customfield/:id", authorize(["super_admin"]), asyncHandler(updateCustomField));
+router.delete("/customfield/:id", authorize(["super_admin"]), asyncHandler(deleteCustomField));
 
 export default router;
