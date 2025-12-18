@@ -26,7 +26,13 @@ export class Customer {
   logo!: string;
 
   @Column({ default: "" })
+  title!: string; // Mr, Mrs, Ms, Dr
+
+  @Column({ default: "" })
   firstName!: string;
+
+  @Column({ default: "" })
+  middleName!: string;
 
   @Column({ default: "" })
   lastName!: string;
@@ -50,8 +56,16 @@ export class Customer {
   businessType!: string;
   
   @Column({ type: "json", nullable: true })
-  businessAddress!: { buildingName: string; buildingNumber: string; street: string; town: string; 
-    city: string; postalCode: string; country: string; };
+  businessAddress!: {
+    buildingName: string;
+    buildingNumber: string;
+    street: string;
+    town: string;
+    city: string;
+    county: string;
+    postalCode: string;
+    country: string;
+  };
 
   @Column({default:""})
   businessWebsite! : string;
@@ -62,8 +76,17 @@ export class Customer {
   @Column({ default: "" })
   phoneNumber!: string;
 
+  @Column({ default: "" })
+  phoneType!: string; // Mobile, Work, Home
+
+  @Column({ default: "" })
+  countryCode!: string; // +44, +1, etc.
+
   @Column({ default: "", unique: true })
   email!: string;
+
+  @Column({ default: "" })
+  emailType!: string; // Work, Personal
 
   @Column({ default: "" })
   password!: string;
