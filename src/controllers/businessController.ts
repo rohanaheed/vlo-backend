@@ -1762,6 +1762,19 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
   const qb = customFieldGroupRepo.createQueryBuilder("group")
+    .leftJoin(Subcategory, "subcategory", "subcategory.id = group.subcategoryId AND subcategory.isDelete = false")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = subcategory.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "group.id as id",
+      "group.title as title",
+      "group.subcategoryId as subcategoryId",
+      "group.linkedTo as linkedTo",
+      "group.isDelete as isDelete",
+      "group.createdAt as createdAt",
+      "group.updatedAt as updatedAt",
+      "subcategory.title as subcategoryName",
+      "practiceArea.title as practiceAreaName"
+    ])
     .where("group.isDelete = :isDelete", { isDelete: false });
 
   if (search) {
@@ -1775,9 +1788,12 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
     .skip((page - 1) * limit)
     .take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const data = await qb.getRawMany();
+  const totalResult = await customFieldGroupRepo.createQueryBuilder("group")
+    .where("group.isDelete = :isDelete", { isDelete: false })
+    .getCount();
 
-  return res.json({ data, total, page, limit });
+  return res.json({ data, total: totalResult, page, limit });
 };
 
 /**
@@ -1807,13 +1823,29 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
  */
 export const getCustomFieldGroupById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const group = await customFieldGroupRepo.findOneBy({ id: Number(id), isDelete: false });
 
-  if (!group) {
+  const result = await customFieldGroupRepo.createQueryBuilder("group")
+    .leftJoin(Subcategory, "subcategory", "subcategory.id = group.subcategoryId AND subcategory.isDelete = false")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = subcategory.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "group.id as id",
+      "group.title as title",
+      "group.subcategoryId as subcategoryId",
+      "group.linkedTo as linkedTo",
+      "group.isDelete as isDelete",
+      "group.createdAt as createdAt",
+      "group.updatedAt as updatedAt",
+      "subcategory.title as subcategoryName",
+      "practiceArea.title as practiceAreaName"
+    ])
+    .where("group.id = :id AND group.isDelete = :isDelete", { id: Number(id), isDelete: false })
+    .getRawOne();
+
+  if (!result) {
     return res.status(404).json({ message: "CustomFieldGroup not found" });
   }
 
-  return res.json(group);
+  return res.json(result);
 };
 
 /**
