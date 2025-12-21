@@ -7,6 +7,7 @@ import { Subcategory } from "../entity/Subcategory";
 import { CustomField } from "../entity/CustomField";
 import { CustomfieldGroup } from "../entity/CustomfieldGroup";
 import { businessEntitySchema, businessPracticeAreaSchema, businessTypeSchema, subcategorySchema, updateSubcategorySchema } from "../utils/validators/inputValidator";
+import { Not } from "typeorm";
 
 const businessEntityRepo = AppDataSource.getRepository(BusinessEntity);
 const practiceRepo = AppDataSource.getRepository(BusinessPracticeArea);
@@ -678,31 +679,49 @@ export const deleteBusinessEntity = async (req: Request, res: Response): Promise
  *       409:
  *         description: Already exists
  */
-export const createPracticeArea = async (req: Request, res: Response): Promise<any> => {
-  const {error,value} = businessPracticeAreaSchema.validate(req.body)
-  if(error){
+
+export const createPracticeArea = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  const { error, value } = businessPracticeAreaSchema.validate(req.body);
+  if (error) {
     return res.status(400).json({
       success: false,
-      message: error.details[0].message
-    })
+      message: error.details[0].message,
+    });
   }
-  const title = value.title
-  const code = value.code
-  const existing = await practiceRepo.findOne({ 
-    where : {
-      title,
-      isDelete : false
-    }
-   });
+
+  const { title, code } = value;
+
+  // check uniqueness by code
+  const existing = await practiceRepo.findOne({
+    where: {
+      code,
+      isDelete: false,
+    },
+  });
+
   if (existing) {
-    return res.status(409).json({ message: "Already exists" });
+    return res.status(409).json({
+      success: false,
+      message: "Practice area with this code already exists",
+    });
   }
 
-  const area = practiceRepo.create({ title, code, isDelete: false, createdAt: new Date(), updatedAt: new Date() });
-  await practiceRepo.save(area);
-  return res.status(201).json(area);
-};
+  const area = practiceRepo.create({
+    title,
+    code,
+    isDelete: false,
+  });
 
+  await practiceRepo.save(area);
+
+  return res.status(201).json({
+    success: true,
+    data: area,
+  });
+};
 
 /**
  * @swagger
@@ -872,26 +891,64 @@ export const getPracticeAreaById = async (req: Request, res: Response): Promise<
  *       404:
  *         description: Not found
  */
-export const updatePracticeArea = async (req: Request, res: Response): Promise<any> => {
+export const updatePracticeArea = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   const { id } = req.params;
-  const {error,value} = businessPracticeAreaSchema.validate(req.body)
-  if(error){
+
+  const { error, value } = businessPracticeAreaSchema.validate(req.body);
+  if (error) {
     return res.status(400).json({
       success: false,
-      message: error.details[0].message
-    })
+      message: error.details[0].message,
+    });
   }
-  const title = value.title;
-  const code = value.code;
-  const area = await practiceRepo.findOneBy({ id: Number(id), isDelete: false });
-  if (!area) return res.status(404).json({ message: "Not found" });
+
+  const { title, code } = value;
+
+  const area = await practiceRepo.findOne({
+    where: {
+      id: Number(id),
+      isDelete: false,
+    },
+  });
+
+  if (!area) {
+    return res.status(404).json({
+      success: false,
+      message: "Practice area not found",
+    });
+  }
+
+  // check if code already used by another record
+  const codeExists = await practiceRepo.findOne({
+    where: {
+      code,
+      isDelete: false,
+      id: Not(Number(id))
+    },
+  });
+
+  if (codeExists) {
+    return res.status(409).json({
+      success: false,
+      message: "Practice area with this code already exists",
+    });
+  }
 
   area.title = title;
   area.code = code;
   area.updatedAt = new Date();
+
   await practiceRepo.save(area);
-  return res.json(area);
+
+  return res.json({
+    success: true,
+    data: area,
+  });
 };
+
 
 /**
  * @swagger
