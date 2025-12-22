@@ -18,20 +18,20 @@ import {
   sendVerificationEmail,
 } from "../utils/emailUtils";
 import { UserRole } from "../entity/User";
-import { uploadFileToS3 } from "../utils/s3Utils";
 import { Transaction } from "../entity/Transaction";
 import { Subscription } from "../entity/Subscription";
 import { Package } from "../entity/Package";
 import { Currency } from "../entity/Currency";
-import { CustomerAddOn } from "../entity/CustomerAddOn";
-import { MoreThan, In } from "typeorm";
+import { CustomerPackage } from "../entity/CustomerPackage";
+import { MoreThanOrEqual, LessThanOrEqual, And, In } from "typeorm";
 const customerRepo = AppDataSource.getRepository(Customer);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
 const currencyRepo = AppDataSource.getRepository(Currency)
 const subscriptionRepo = AppDataSource.getRepository(Subscription);
 const packageRepo = AppDataSource.getRepository(Package);
-const customerAddOnsRepo = AppDataSource.getRepository(CustomerAddOn)
+const customerPackageRepo = AppDataSource.getRepository(CustomerPackage)
+
 /**
  * @swagger
  * /api/customers:
@@ -95,42 +95,41 @@ export const createCustomer = async (
     }
 
     // If logo is provided as a file or base64, upload to S3 and get URL
-    if (value.logo) {
-      const matches = value.logo.match(/^data:(.+);base64,(.*)$/);
-      if (!matches) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid base64 logo format.",
-        });
-      }
+    // if (value.logo) {
+    //   const matches = value.logo.match(/^data:(.+);base64,(.*)$/);
+    //   if (!matches) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Invalid base64 logo format.",
+    //     });
+    //   }
 
-      const mimeType = matches[1];
-      const base64Data = matches[2];
-      const ext = mimeType.split("/")[1] ? `.${mimeType.split("/")[1]}` : "";
-      const buffer = Buffer.from(base64Data, "base64");
+    //   const mimeType = matches[1];
+    //   const base64Data = matches[2];
+    //   const ext = mimeType.split("/")[1] ? `.${mimeType.split("/")[1]}` : "";
+    //   const buffer = Buffer.from(base64Data, "base64");
 
-      const key = `customers/${Date.now()}_${Math.random()
-        .toString(36)
-        .substring(2, 10)}${ext}`;
+    //   const key = `customers/${Date.now()}_${Math.random()
+    //     .toString(36)
+    //     .substring(2, 10)}${ext}`;
 
-      const originalname = `logo${ext}`;
+    //   const originalname = `logo${ext}`;
 
-      const s3LogoUrl = await uploadFileToS3({
-        bucket: process.env.LOGO_BUCKET || "",
-        buffer,
-        originalname,
-        mimetype: mimeType,
-        key,
-      });
+    //   const s3LogoUrl = await uploadFileToS3({
+    //     bucket: process.env.LOGO_BUCKET || "",
+    //     buffer,
+    //     originalname,
+    //     mimetype: mimeType,
+    //     key,
+    //   });
 
-      value.logo = s3LogoUrl;
-    }
+    //   value.logo = s3LogoUrl;
+    // }
 
     // existing verified customer
     const customer = existingCustomer;
 
     customer.createdByUserId = userId;
-    customer.logo = value.logo || "";
     customer.title = value.title || "";
     customer.firstName = value.firstName;
     customer.middleName = value.middleName || "";
@@ -448,197 +447,330 @@ export const checkCustomerExist = async (
   }
 };
 
-export const selectCustomerPackage = async (req: Request, res: Response): Promise<any> => {
+export const selectCustomerPackage = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { customerId } = req.params;
     const { packageId } = req.body;
 
-    // Check if customer exists
-    const customer = await customerRepo.findOne({ where : { id : Number(customerId) } })
-    if(!customer){
-      return res.status(404).json({
-        success : false,
-        message : "Customer not found"
-      })
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId), isDelete: false }
+    });
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
     }
 
-    // Check if package exists
-    const pkg = await packageRepo.findOne({ where : { id : Number(packageId) } })
-    if(!pkg){
-      return res.status(404).json({
-        success : false,
-        message : "Package not found"
-      })
+    const pkg = await packageRepo.findOne({
+      where: { id: Number(packageId), isDelete: false }
+    });
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: "Package not found" });
     }
 
+    // Find existing customer package
+    const existingCustomerPackage = await customerPackageRepo.findOne({
+      where: { customerId: Number(customerId), isDelete: false }
+    });
+
+    if (existingCustomerPackage) {
+      // Check if package is being changed
+      const isPackageChanged = existingCustomerPackage.packageId !== Number(packageId);
+      
+      // Update existing record
+      existingCustomerPackage.packageId = Number(packageId);
+      
+      // If package changed, clear all add-ons
+      if (isPackageChanged) {
+        existingCustomerPackage.addOns = [];
+      }
+      // If package not changed, keep existing add-ons
+      
+      await customerPackageRepo.save(existingCustomerPackage);
+    } else {
+      // Create new record if no package exists
+      await customerPackageRepo.save({
+        customerId: Number(customerId),
+        packageId: Number(packageId),
+        addOns: [],
+        isDelete: false
+      });
+    }
+
+    // Update customer's packageId reference
     customer.packageId = Number(packageId);
     await customerRepo.save(customer);
 
     return res.status(201).json({
-      success : true,
-      message : "Package selected successfully"
-    })
+      success: true,
+      message: "Package selected successfully"
+    });
 
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const selectCustomerAddOns = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { customerId, packageId } = req.params;
+    const { selectedAddOns } = req.body;
+
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: Number(customerId), isDelete: false }
+    });
+
+    if (!customerPackage) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a package first"
+      });
+    }
+
+    // Verify customer hasn't changed package
+    if (customerPackage.packageId !== Number(packageId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Package mismatch. Please select the current package's add-ons."
+      });
+    }
+
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage.packageId, isDelete: false }
+    });
+
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: "Package not found" });
+    }
+
+    // Validate and build new add-ons list
+    const validAddOns = [];
+    const selectedModuleFeatures = new Set();
+
+    for (const addOn of selectedAddOns) {
+      const match = pkg.extraAddOn.find(
+        a => a.module === addOn.module && a.feature === addOn.feature
+      );
+      
+      if (!match) continue;
+
+      const key = `${match.module}:${match.feature}`;
+      selectedModuleFeatures.add(key);
+
+      validAddOns.push({
+        module: match.module,
+        feature: match.feature,
+        monthlyPrice: match.monthlyPrice,
+        yearlyPrice: match.yearlyPrice,
+        discount: match.discount,
+        description: match.description
+      });
+    }
+
+    // Keep existing add-ons that are still in the package and not being replaced
+    const existingAddOns = customerPackage.addOns || [];
+    for (const existingAddOn of existingAddOns) {
+      const key = `${existingAddOn.module}:${existingAddOn.feature}`;
+      
+      // Only keep if not in new selection and still valid in package
+      if (!selectedModuleFeatures.has(key)) {
+        const stillValid = pkg.extraAddOn.find(
+          a => a.module === existingAddOn.module && a.feature === existingAddOn.feature
+        );
+        
+        if (stillValid) {
+          validAddOns.push(existingAddOn);
+        }
+      }
+    }
+
+    // Remove duplicates 
+    const uniqueAddOns = Array.from(
+      new Map(validAddOns.map(item => [`${item.module}:${item.feature}`, item])).values()
+    );
+
+    customerPackage.addOns = uniqueAddOns;
+    await customerPackageRepo.save(customerPackage);
+
+    return res.status(200).json({
+      success: true,
+      message: "Add-ons updated successfully",
+      data: { addOns: uniqueAddOns }
+    });
+
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const getCustomerOrderSummary = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { customerId } = req.params;
+
+    // Customer
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId), isDelete: false },
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Currency
+    const currency = await currencyRepo.findOne({
+      where: { id: customer.currencyId },
+    });
+
+    // Active package
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: Number(customerId), isDelete: false },
+    });
+
+    if (!customerPackage) {
+      return res.status(404).json({
+        success: false,
+        message: "Package not selected",
+      });
+    }
+
+    // Package
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage.packageId },
+    });
+
+    if (!pkg) {
+      return res.status(404).json({
+        success: false,
+        message: "Package not found",
+      });
+    }
+
+    const exchangeRate = currency?.exchangeRate || 1;
+
+    // Helper function to apply discount
+    const applyDiscount = (price: number, discount: number): number => {
+      return price - (price * discount) / 100;
+    };
+
+    // Convert package with discount calculation
+    const packageMonthlyPrice = (pkg.priceMonthly ?? 0) * exchangeRate;
+    const packageYearlyPrice = (pkg.priceYearly ?? 0) * exchangeRate;
+    const packageDiscount = pkg.discount || 0;
+
+    const packageMonthlyAfterDiscount = applyDiscount(packageMonthlyPrice, packageDiscount);
+    const packageYearlyAfterDiscount = applyDiscount(packageYearlyPrice, packageDiscount);
+
+    const convertedPackage = {
+      packageName: pkg.name,
+      seats: pkg.seats,
+      monthlyPrice: packageMonthlyPrice.toFixed(2),
+      yearlyPrice: packageYearlyPrice.toFixed(2),
+      discount: packageDiscount,
+      monthlyPriceAfterDiscount: packageMonthlyAfterDiscount.toFixed(2),
+      yearlyPriceAfterDiscount: packageYearlyAfterDiscount.toFixed(2),
+    };
+
+    // Convert add-ons with discount calculation
+    const convertedAddOns = customerPackage.addOns?.map((addOn) => {
+      const monthlyPrice = (addOn.monthlyPrice ?? 0) * exchangeRate;
+      const yearlyPrice = (addOn.yearlyPrice ?? 0) * exchangeRate;
+      const discount = addOn.discount || 0;
+
+      return {
+        module: addOn.module,
+        feature: addOn.feature,
+        monthlyPrice: monthlyPrice.toFixed(2),
+        yearlyPrice: yearlyPrice.toFixed(2),
+        discount: discount,
+        monthlyPriceAfterDiscount: applyDiscount(monthlyPrice, discount).toFixed(2),
+        yearlyPriceAfterDiscount: applyDiscount(yearlyPrice, discount).toFixed(2),
+        description: addOn.description,
+      };
+    }) || [];
+
+    // Calculate add-ons totals (after discount)
+    const addOnsMonthlyTotal = convertedAddOns
+      .reduce((total, addOn) => total + parseFloat(addOn.monthlyPriceAfterDiscount), 0)
+      .toFixed(2);
+    
+    const addOnsYearlyTotal = convertedAddOns
+      .reduce((total, addOn) => total + parseFloat(addOn.yearlyPriceAfterDiscount), 0)
+      .toFixed(2);
+
+    // Calculate totals (package + add-ons, both after discounts)
+    const totalPriceMonthly = (
+      parseFloat(convertedPackage.monthlyPriceAfterDiscount) + 
+      parseFloat(addOnsMonthlyTotal)
+    ).toFixed(2);
+    
+    const totalPriceYearly = (
+      parseFloat(convertedPackage.yearlyPriceAfterDiscount) + 
+      parseFloat(addOnsYearlyTotal)
+    ).toFixed(2);
+
+    // Calculate total savings
+    const totalMonthlyBeforeDiscount = (
+      packageMonthlyPrice + 
+      convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.monthlyPrice), 0)
+    ).toFixed(2);
+    
+    const totalYearlyBeforeDiscount = (
+      packageYearlyPrice + 
+      convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.yearlyPrice), 0)
+    ).toFixed(2);
+
+    const totalMonthlySavings = (
+      parseFloat(totalMonthlyBeforeDiscount) - parseFloat(totalPriceMonthly)
+    ).toFixed(2);
+    
+    const totalYearlySavings = (
+      parseFloat(totalYearlyBeforeDiscount) - parseFloat(totalPriceYearly)
+    ).toFixed(2);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        currency: {
+          code: currency?.currencyCode,
+          symbol: currency?.currencySymbol,
+        },
+        package: convertedPackage,
+        addOns: convertedAddOns,
+        summary: {
+          // Add-ons subtotal
+          addOnsMonthlyTotal,
+          addOnsYearlyTotal,
+          // Grand totals (after all discounts)
+          totalPriceMonthly,
+          totalPriceYearly,
+          // Before discount totals
+          totalMonthlyBeforeDiscount,
+          totalYearlyBeforeDiscount,
+          // Total savings
+          totalMonthlySavings,
+          totalYearlySavings,
+        },
+      },
+      message: "Customer order summary fetched successfully",
+    });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
     });
   }
-}
-
-export const selectCustomerAddOns = async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { customerId, packageId } = req.params;
-    const { selectedAddOns } = req.body;
-
-    if (!Array.isArray(selectedAddOns)) {
-      return res.status(400).json({
-        success: false,
-        message: "selectedAddOns must be an array"
-      });
-    }
-
-    const customer = await customerRepo.findOne({ where: { id: Number(customerId) } });
-    if (!customer) {
-      return res.status(404).json({ success: false, message: "Customer not found" });
-    }
-
-    const pkg = await packageRepo.findOne({ where: { id: Number(packageId) } });
-    if (!pkg) {
-      return res.status(404).json({ success: false, message: "Package not found" });
-    }
-
-    // Remove previous selections
-    await customerAddOnsRepo.delete({
-      customerId: Number(customerId), 
-      packageId: Number(packageId)
-    });
-
-    // Allowed add-ons from package
-    const allowedAddOns = pkg.extraAddOn || [];
-
-     const validAddOns: {
-      module?: string;
-      feature?: string;
-      monthlyPrice?: number;
-      yearlyPrice?: number;
-      discount?: number;
-      description?: string;
-    }[] = [];
-
-    for (const addOn of selectedAddOns) {
-      const valid = allowedAddOns.find(
-        (a) => a.module === addOn.module && a.feature === addOn.feature
-      );
-
-      if (!valid) continue;
-
-      validAddOns.push({
-        module: valid.module,
-        feature: valid.feature || "",
-        monthlyPrice: Number(valid.monthlyPrice || 0),
-        yearlyPrice: Number(valid.yearlyPrice || 0),
-        discount: Number(valid.discount || 0),
-        description: valid.description || "",
-      });
-    }
-    const customerAddOn = customerAddOnsRepo.create({
-      customerId: Number(customerId),
-      packageId: Number(packageId),
-      addOns: validAddOns,
-      isDelete: false,
-    })
-    await customerAddOnsRepo.save(customerAddOn);
-
-    return res.status(201).json({
-      success: true,
-      data : customerAddOn,
-      message: "Customer add-ons saved successfully"
-    });
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
 };
-
-export const getCustomerOrderSummary = async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { customerId } = req.params
-
-    // Get Customer
-    const customer = await customerRepo.findOne({ where: { id: Number(customerId) } })
-    // Get Customer Currency
-    const currency = await currencyRepo.findOne({ where: { id: customer?.currencyId } })
-    // Get Customer Package
-    const customerPackage = await packageRepo.findOne({ where: { id: customer?.packageId } })
-    // Get Customer AddOns
-    const customerAddOns = await customerAddOnsRepo.find({ 
-     where: { 
-       customerId: Number(customerId), packageId: customerPackage?.id
-      } 
-   })
-  //  Validate Customer Data
-   if(!customer || !customerPackage){
-    return res.status(404).json({
-      success: false,
-      message: "Customer or Package not found"
-    });
-   }
-   if(!currency){
-    return res.status(404).json({
-      success: false,
-      message: "Currency not found"
-    });
-   }
-  if(!customerAddOns){
-    return res.status(404).json({
-      success: false,
-      message: "Customer AddOns not found"
-    });
-   }
-  //  Convert Prices
-  const convertedPackage = {
-    packageName : customerPackage.name,
-    priceMonthly: Number(customerPackage.priceMonthly * currency.exchangeRate).toFixed(2),
-    priceYearly: Number(customerPackage.priceYearly * currency.exchangeRate).toFixed(2),
-  }
-  const convertedAddOns = customerAddOns[0].addOns?.map((addOn => ({
-    module : addOn.module,
-    feature : addOn.feature,
-    description : addOn.description,
-    priceMonthly : (Number(addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2),
-    priceYearly : (Number(addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2),
-    discount : addOn.discount
-  })))
-
-  // Total Price
-  const addOnsMonthlyTotal = convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.priceMonthly), 0).toFixed(2);
-  const addOnsYearlyTotal = convertedAddOns.reduce((total, addOn) => total + parseFloat(addOn.priceYearly), 0).toFixed(2);
-  const totalPriceMonthly = (parseFloat(convertedPackage.priceMonthly) + parseFloat(addOnsMonthlyTotal)).toFixed(2);
-  const totalPriceYearly = (parseFloat(convertedPackage.priceYearly) + parseFloat(addOnsYearlyTotal)).toFixed(2);
-  return res.json({
-    success: true,
-    data: {
-        package: convertedPackage,
-        addOns: convertedAddOns,
-        addOnsMonthlyTotal,
-        addOnsYearlyTotal,
-        totalPriceMonthly,
-        totalPriceYearly,
-        currencyCode: currency.currencyCode,
-        currencySymbol: currency.currencySymbol
-    },
-    message: 'Customer order summary retrieved successfully'
-  });
-  } catch (error) {
-    
-  }
-}
 
 /**
  * @swagger
@@ -685,39 +817,166 @@ export const getCustomerOrderSummary = async (req: Request, res: Response): Prom
  *                 totalTrials:
  *                   type: integer
  */
-export const getCustomerDashboardStats = async (req: Request, res: Response): Promise<any> => {
-  try {
-    const baseWhere = { isDelete: false };
 
+export const getCustomerDashboardStats = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+
+    // Start of week (Monday)
+    const getStartOfWeek = (date: Date) => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    // Start of month
+    const getStartOfMonth = (date: Date) => {
+      const d = new Date(date);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    const startOfThisWeek = getStartOfWeek(now);
+    const startOfPreviousWeek = new Date(startOfThisWeek);
+    startOfPreviousWeek.setDate(startOfThisWeek.getDate() - 7);
+
+    const startOfThisMonth = getStartOfMonth(now);
+    const startOfPreviousMonth = new Date(startOfThisMonth);
+    startOfPreviousMonth.setMonth(startOfThisMonth.getMonth() - 1);
+
+    // Calculate how many days have passed in current week and month
+    const daysIntoWeek = Math.floor((now.getTime() - startOfThisWeek.getTime()) / (1000 * 60 * 60 * 24));
+    const daysIntoMonth = now.getDate() - 1; 
+
+    // End points for previous periods
+    const endOfPreviousWeek = new Date(startOfPreviousWeek);
+    endOfPreviousWeek.setDate(startOfPreviousWeek.getDate() + daysIntoWeek);
+    endOfPreviousWeek.setHours(23, 59, 59, 999);
+
+    const endOfPreviousMonth = new Date(startOfPreviousMonth);
+    endOfPreviousMonth.setDate(startOfPreviousMonth.getDate() + daysIntoMonth);
+    endOfPreviousMonth.setHours(23, 59, 59, 999);
+
+    const calculateGrowth = (current: number, previous: number): number => {
+      if (previous === 0) {
+        return current > 0 ? 100 : 0;
+      }
+      return Math.round(((current - previous) / previous) * 100);
+    };
+
+    const baseWhere = { isDelete: false };
+    
+    // Compare equal time periods
+    const countPeriod = async (
+      repo: any, 
+      where: any, 
+      startCurrent: Date, 
+      endCurrent: Date,
+      startPrevious: Date,
+      endPrevious: Date
+    ) => {
+      const previous = await repo.count({
+        where: {
+          ...where,
+          createdAt: And(MoreThanOrEqual(startPrevious), LessThanOrEqual(endPrevious)), 
+        },
+      });
+
+      const current = await repo.count({
+        where: {
+          ...where,
+          createdAt: And(MoreThanOrEqual(startCurrent), LessThanOrEqual(endCurrent)),
+        },
+      });
+
+      return { current, previous, growth: calculateGrowth(current, previous) };
+    };
+
+    // Total counts
+    const totalCustomers = await customerRepo.count({ where: baseWhere });
+    const activeCustomers = await customerRepo.count({ where: { ...baseWhere, status: "Active" } });
+    const inactiveCustomers = await customerRepo.count({ where: { ...baseWhere, status: "Inactive" } });
+    const licenseExpired = await customerRepo.count({ where: { ...baseWhere, status: "License Expired" } });
+    const totalTrials = await customerRepo.count({ where: { ...baseWhere, status: "Trial" } });
+    const totalSubscriptions = await subscriptionRepo.count({ where: { isDelete: false } });
+
+    // Weekly growth
     const [
-      totalCustomers,
-      activeCustomers,
-      inactiveCustomers,
-      licenseExpired,
-      totalTrials,
-      totalSubscriptions,
+      totalCustPeriod,
+      activeCustPeriod,
+      inactiveCustPeriod,
+      licenseExpiredPeriod,
+      trialsPeriod,
+      subscriptionsPeriod,
     ] = await Promise.all([
-      customerRepo.count({ where: baseWhere }),
-      customerRepo.count({ where: { ...baseWhere, status: "Active" } }),
-      customerRepo.count({ where: { ...baseWhere, status: "Inactive" } }),
-      customerRepo.count({ where: { ...baseWhere, status: "License Expired" } }),
-      customerRepo.count({ where: { ...baseWhere, status: "Trial" } }),
-      subscriptionRepo.count({ where: { isDelete: false } }),
+      countPeriod(customerRepo, baseWhere, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+      countPeriod(customerRepo, { ...baseWhere, status: "Active" }, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+      countPeriod(customerRepo, { ...baseWhere, status: "Inactive" }, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+      countPeriod(customerRepo, { ...baseWhere, status: "License Expired" }, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+      countPeriod(customerRepo, { ...baseWhere, status: "Trial" }, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+      countPeriod(subscriptionRepo, { isDelete: false }, startOfThisWeek, now, startOfPreviousWeek, endOfPreviousWeek),
+    ]);
+
+    // Monthly growth
+    const [
+      totalCustMonthPeriod,
+      activeCustMonthPeriod,
+      inactiveCustMonthPeriod,
+      licenseExpiredMonthPeriod,
+      trialsMonthPeriod,
+      subscriptionsMonthPeriod,
+    ] = await Promise.all([
+      countPeriod(customerRepo, baseWhere, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
+      countPeriod(customerRepo, { ...baseWhere, status: "Active" }, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
+      countPeriod(customerRepo, { ...baseWhere, status: "Inactive" }, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
+      countPeriod(customerRepo, { ...baseWhere, status: "License Expired" }, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
+      countPeriod(customerRepo, { ...baseWhere, status: "Trial" }, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
+      countPeriod(subscriptionRepo, { isDelete: false }, startOfThisMonth, now, startOfPreviousMonth, endOfPreviousMonth),
     ]);
 
     return res.json({
-      totalCustomers,
-      activeCustomers,
-      inactiveCustomers,
-      licenseExpired,
-      totalTrials,
-      totalSubscriptions,
+      totalCustomers: {
+        count: totalCustomers,
+        weeklyGrowth: totalCustPeriod.growth,
+        monthlyGrowth: totalCustMonthPeriod.growth,
+      },
+      activeCustomers: {
+        count: activeCustomers,
+        weeklyGrowth: activeCustPeriod.growth,
+        monthlyGrowth: activeCustMonthPeriod.growth,
+      },
+      inactiveCustomers: {
+        count: inactiveCustomers,
+        weeklyGrowth: inactiveCustPeriod.growth,
+        monthlyGrowth: inactiveCustMonthPeriod.growth,
+      },
+      licenseExpired: {
+        count: licenseExpired,
+        weeklyGrowth: licenseExpiredPeriod.growth,
+        monthlyGrowth: licenseExpiredMonthPeriod.growth,
+      },
+      totalTrials: {
+        count: totalTrials,
+        weeklyGrowth: trialsPeriod.growth,
+        monthlyGrowth: trialsMonthPeriod.growth,
+      },
+      totalSubscriptions: {
+        count: totalSubscriptions,
+        weeklyGrowth: subscriptionsPeriod.growth,
+        monthlyGrowth: subscriptionsMonthPeriod.growth,
+      },
     });
+
   } catch (error) {
     console.error("Error getting customer stats:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: error instanceof Error ? error.message : error,
     });
   }
 };
@@ -824,136 +1083,168 @@ export const getCustomerDashboardStats = async (req: Request, res: Response): Pr
  *                 totalItems:
  *                   type: integer
  */
+
 export const getAllCustomers = async (req: Request, res: Response): Promise<any> => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
+    // Input validation & sanitization
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
 
-  const sortBy = (req.query.sortBy as string) || "createdAt"; // createdAt | expiryDate | lastActive
-  const orderParam = (req.query.order as string)?.toLowerCase() || "asc";
-  const order: "ASC" | "DESC" = orderParam === "desc" || orderParam === "dsc" ? "DESC" : "ASC";
+    const allowedSortFields = ['createdAt', 'expiryDate', 'lastActive', 'email', 'id'];
+    const sortBy = allowedSortFields.includes(req.query.sortBy as string) 
+      ? (req.query.sortBy as string) 
+      : 'createdAt';
+    
+    const orderParam = (req.query.order as string)?.toLowerCase() || "asc";
+    const order: "ASC" | "DESC" = orderParam === "desc" || orderParam === "dsc" ? "DESC" : "ASC";
 
-  const email = (req.query.email as string) || "";
-  const id = req.query.id ? Number(req.query.id) : undefined;
-  const stage = req.query.stage as string | undefined;
-  const type = req.query.type as string | undefined;
-  const churnRisk = req.query.churnRisk as string | undefined;
-  const status = req.query.status as string | undefined;
-  const startDate = req.query.startDate as string | undefined;
-  const endDate = req.query.endDate as string | undefined;
+    // Filters
+    const email = (req.query.email as string) || "";
+    const id = req.query.id ? Number(req.query.id) : undefined;
+    const stage = req.query.stage as string | undefined;
+    const type = req.query.type as string | undefined;
+    const churnRisk = req.query.churnRisk as string | undefined;
+    const status = req.query.status as string | undefined;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
 
-  let qb = customerRepo
-    .createQueryBuilder("customer")
-    .where("customer.isDelete = false");
+    // Build query
+    let qb = customerRepo
+      .createQueryBuilder("customer")
+      .where("customer.isDelete = false");
 
-  if (email) {
-    qb.andWhere("customer.email LIKE :email", { email: `%${email}%` });
-  }
+    if (email) {
+      qb.andWhere("customer.email LIKE :email", { email: `%${email}%` });
+    }
 
-  if (id && !isNaN(id)) {
-    qb.andWhere("customer.id = :id", { id });
-  }
+    if (id && !isNaN(id)) {
+      qb.andWhere("customer.id = :id", { id });
+    }
 
-  if (stage) {
-    qb.andWhere("customer.stage = :stage", { stage });
-  }
+    if (stage) {
+      qb.andWhere("customer.stage = :stage", { stage });
+    }
 
-  if (type) {
-    qb.andWhere("customer.businessType = :type", { type });
-  }
+    if (type) {
+      qb.andWhere("customer.businessType = :type", { type });
+    }
 
-  if (churnRisk) {
-    qb.andWhere("customer.churnRisk = :churnRisk", { churnRisk });
-  }
+    if (churnRisk) {
+      qb.andWhere("customer.churnRisk = :churnRisk", { churnRisk });
+    }
 
-  if (status) {
-    qb.andWhere("customer.status = :status", { status });
-  }
+    if (status) {
+      qb.andWhere("customer.status = :status", { status });
+    }
 
-  if (startDate && endDate) {
-    qb.andWhere("customer.createdAt BETWEEN :start AND :end", {
-      start: new Date(startDate),
-      end: new Date(endDate),
+    // Date filters - allow independent start/end dates
+    if (startDate) {
+      try {
+        const start = new Date(startDate);
+        if (!isNaN(start.getTime())) {
+          qb.andWhere("customer.createdAt >= :start", { start });
+        }
+      } catch (e) {
+        // Invalid date, skip filter
+      }
+    }
+
+    if (endDate) {
+      try {
+        const end = new Date(endDate);
+        if (!isNaN(end.getTime())) {
+          qb.andWhere("customer.createdAt <= :end", { end });
+        }
+      } catch (e) {
+        // Invalid date, skip filter
+      }
+    }
+
+    // Execute query with pagination
+    const [customers, total] = await qb
+      .orderBy(`customer.${sortBy}`, order)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    // Fetch related subscriptions
+    const customerIds = customers.map((c) => c.id);
+    const subscriptions = customerIds.length
+      ? await subscriptionRepo.find({
+          where: { customerId: In(customerIds), isDelete: false },
+        })
+      : [];
+
+    // Fetch related packages
+    const packageIds = [...new Set(subscriptions.map((s) => s.customerPackageId))]; // Use Set to avoid duplicates
+    const packages = packageIds.length
+      ? await packageRepo.findBy({ id: In(packageIds) })
+      : [];
+
+    // Create lookup maps
+    const subscriptionMap = new Map();
+    subscriptions.forEach((s) => subscriptionMap.set(s.customerId, s));
+
+    const packageMap = new Map();
+    packages.forEach((p) => packageMap.set(p.id, p));
+
+    // Map data with relations
+    const data = customers.map((customer) => {
+      const subscription = subscriptionMap.get(customer.id);
+      const pkg = subscription ? packageMap.get(subscription.customerPackageId) : null;
+
+      return {
+        ...customer,
+        subscription: subscription
+          ? {
+              id: subscription.id,
+              status: subscription.status,
+              billingCycle: subscription.billingCycle,
+              price: subscription.amount,
+              isPaid: subscription.isPaid,
+            }
+          : null,
+        package: pkg
+          ? {
+              id: pkg.id,
+              name: pkg.name,
+              type: pkg.type,
+              price: {
+                monthly: pkg.priceMonthly,
+                yearly: pkg.priceYearly,
+              },
+            }
+          : null,
+      };
     });
-  }
 
-  const [customers, total] = await qb
-    .orderBy(`customer.${sortBy}`, order)
-    .skip((page - 1) * limit)
-    .take(limit)
-    .getManyAndCount();
-
-  // Subscriptions
-  const customerIds = customers.map((c) => c.id);
-  const subscriptions = customerIds.length
-    ? await subscriptionRepo.find({
-        where: { customerId: In(customerIds), isDelete: false },
-      })
-    : [];
-
-  const packageIds = subscriptions.map((s) => s.packageId);
-  const packages = packageIds.length
-    ? await packageRepo.findBy({ id: In(packageIds) })
-    : [];
-
-  const subscriptionMap = new Map();
-  subscriptions.forEach((s) => subscriptionMap.set(s.customerId, s));
-
-  const packageMap = new Map();
-  packages.forEach((p) => packageMap.set(p.id, p));
-
-  const data = customers.map((customer) => {
-    const subscription = subscriptionMap.get(customer.id);
-    const pkg = subscription
-      ? packageMap.get(subscription.packageId)
-      : null;
-
-    return {
-      ...customer,
-      subscription: subscription
-        ? {
-            id: subscription.id,
-            status: subscription.status,
-            billingCycle: subscription.billingCycle,
-            price: subscription.amount,
-            isPaid: subscription.isPaid,
-          }
-        : null,
-      package: pkg
-        ? {
-            id: pkg.id,
-            name: pkg.name,
-            type: pkg.type,
-            price: {
-              monthly: pkg.priceMonthly,
-              yearly: pkg.priceYearly,
-            },
-          }
-        : null,
-    };
-  });
-
-  const totalCount = await customerRepo.count({
-    where: { isDelete: false },
-  });
-
-  return res.json({
-    data,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-    totalItems: total,
-    totalCount,
-  });
+    return res.json({
+      data,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+      },
+      filters: {
+        email: email || null,
+        id: id || null,
+        stage: stage || null,
+        type: type || null,
+        churnRisk: churnRisk || null,
+        status: status || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+      }
+    });
   } catch (error) {
-   console.error("Error getting all customer:", error);
+    console.error("Error getting all customers:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-    }); 
+    });
   }
 };
-
 
 /**
  * @swagger
@@ -1021,58 +1312,77 @@ export const getDeletedCustomers = async (
   res: Response
 ): Promise<any> => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    // Pagination (safe)
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
+
     const email = (req.query.email as string) || "";
-    const startDate = req.query.startDate as string;
-    const endDate = req.query.endDate as string;
-    let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
-    let order: "ASC" | "DESC" =
-      orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+
+    const orderParam = (req.query.order as string)?.toLowerCase() || "desc";
+    const order: "ASC" | "DESC" =
+      orderParam === "asc" ? "ASC" : "DESC";
 
     const query = customerRepo
       .createQueryBuilder("customer")
-      .where("customer.isDelete = :isDelete", { isDelete: true });
+      .where("customer.isDelete = true");
 
+    // Email filter
     if (email) {
-      query.andWhere("customer.email LIKE :email", { email: `%${email}%` });
+      query.andWhere("customer.email LIKE :email", {
+        email: `%${email}%`,
+      });
     }
 
+    // Date filters (validated)
     if (startDate) {
-      query.andWhere("customer.deletedAt >= :startDate", {
-        startDate: new Date(startDate),
-      });
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) {
+        query.andWhere("customer.deletedAt >= :start", { start });
+      }
     }
 
     if (endDate) {
-      query.andWhere("customer.deletedAt <= :endDate", {
-        endDate: new Date(endDate),
-      });
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        query.andWhere("customer.deletedAt <= :end", { end });
+      }
     }
 
-    // Get total filtered count
-    const [customers, total] = await query
+    // Query execution
+    const [customers, totalItems] = await query
       .orderBy("customer.deletedAt", order)
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
 
-    // Get total count of all deleted customers (not paginated, not filtered)
-    const totalCount = await customerRepo.count({ where: { isDelete: true } });
+    // Total deleted (unfiltered)
+    const totalCount = await customerRepo.count({
+      where: { isDelete: true },
+    });
 
     return res.status(200).json({
+      success: true,
       data: customers,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-      totalItems: total,
-      totalCount: totalCount,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(totalItems / limit),
+        totalItems,
+        totalCount,
+      },
+      filters: {
+        email: email || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
     });
   } catch (err) {
+    console.error("Get deleted customers error:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: err instanceof Error ? err.message : err,
     });
   }
 };
@@ -1254,7 +1564,6 @@ export const getCustomerById = async (
     const customerData = {
       id: customer.id,
       userId: customer.createdByUserId,
-      logo: customer.logo,
       firstName: customer.firstName,
       lastName: customer.lastName,
       businessName: customer.businessName,
@@ -1436,66 +1745,139 @@ export const sendRegistrationEmail = async (
  *                         type: integer
  *                         description: Number of active customers in that year
  */
-export const getActiveCustomersPerYear = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
-  try {
-    // Query to get count of active customers grouped by year (ignores null createdAt)
-    const result = await customerRepo
-      .createQueryBuilder("customer")
-      .select("YEAR(customer.createdAt)", "year")
-      .addSelect("COUNT(*)", "count")
-      .where("customer.status = :status", { status: "Active" })
-      .andWhere("customer.isDelete = :isDelete", { isDelete: false })
-      .groupBy("YEAR(customer.createdAt)")
-      .orderBy("YEAR(customer.createdAt)", "DESC")
-      .getRawMany();
 
-    if (!result || result.length === 0) {
-      return res.json({
-        currentYear: new Date().getFullYear(),
-        activeCustomers: 0,
-        percentageChange: 0,
-        yearlyData: [],
+export const getActiveCustomersPerYear = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    const percentGrowth = (prev: number, curr: number) => {
+      if (prev === 0 && curr === 0) return 0;
+      if (prev === 0) return 100;
+      return Number((((curr - prev) / prev) * 100).toFixed(2));
+    };
+
+    const applyGrowth = (data: any[]) => {
+      let prev = 0;
+      return data.map(d => {
+        const growth = percentGrowth(prev, d.y);
+        prev = d.y;
+        return { ...d, growth };
       });
+    };
+
+    const currentThreeYears = [currentYear - 2, currentYear - 1, currentYear]; // e.g., [2023, 2024, 2025]
+    const previousThreeYears = [currentYear - 5, currentYear - 4, currentYear - 3]; // e.g., [2020, 2021, 2022]
+    const monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    
+    const datasets: Record<number, any> = {};
+    const currentPeriodTotals: number[] = [];
+    const previousPeriodTotals: number[] = [];
+
+    // Fetch data for current 3 years (2023, 2024, 2025)
+    for (const year of currentThreeYears) {
+      const startDate = new Date(year, 0, 1);
+      const endDate = new Date(year, 11, 31, 23, 59, 59);
+
+      const raw = await customerRepo
+        .createQueryBuilder("customer")
+        .select("MONTH(customer.createdAt)", "month")
+        .addSelect("COUNT(*)", "count")
+        .where("customer.isDelete = false")
+        .andWhere("customer.status = :status", { status: "Active" })
+        .andWhere("customer.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+        .groupBy("MONTH(customer.createdAt)")
+        .orderBy("MONTH(customer.createdAt)", "ASC")
+        .getRawMany();
+
+      const monthData = monthLabels.map((m, i) => {
+        const record = raw.find(r => Number(r.month) === i + 1);
+        return { x: m, y: record ? Number(record.count) : 0 };
+      });
+
+      const monthDataWithGrowth = applyGrowth(monthData);
+      const yearTotal = monthDataWithGrowth.reduce((s, d) => s + d.y, 0);
+      currentPeriodTotals.push(yearTotal);
+
+      datasets[year] = {
+        label: year.toString(),
+        total: yearTotal,
+        data: monthDataWithGrowth,
+        yearOverYearGrowth: 0 // Will be calculated next
+      };
     }
 
-    // Convert safely
-    const yearlyData = result
-      .filter((r) => r.year && !isNaN(Number(r.year)))
-      .map((r) => ({
-        year: Number(r.year),
-        count: Number(r.count),
-      }))
-      .sort((a, b) => a.year - b.year);
+    // Fetch totals for previous 3 years (2020, 2021, 2022) for comparison
+    for (const year of previousThreeYears) {
+      const startDate = new Date(year, 0, 1);
+      const endDate = new Date(year, 11, 31, 23, 59, 59);
 
-    // Handle if there are fewer than 2 years of data
-    const len = yearlyData.length;
-    const currentYear = yearlyData[len - 1]?.year || new Date().getFullYear();
-    const currentCount = yearlyData[len - 1]?.count || 0;
-    const prevCount = len > 1 ? yearlyData[len - 2].count : 0;
+      const count = await customerRepo
+        .createQueryBuilder("customer")
+        .where("customer.isDelete = false")
+        .andWhere("customer.status = :status", { status: "Active" })
+        .andWhere("customer.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+        .getCount();
 
-    const percentageChange =
-      prevCount > 0
-        ? Number((((currentCount - prevCount) / prevCount) * 100).toFixed(1))
-        : 0;
+      previousPeriodTotals.push(count);
+    }
 
-    return res.json({
-      currentYear,
-      activeCustomers: currentCount,
-      percentageChange,
-      yearlyData,
+    // Calculate year-over-year growth (comparing each year with previous year)
+    // 2024 vs 2023, 2025 vs 2024
+    for (let i = 1; i < currentThreeYears.length; i++) {
+      datasets[currentThreeYears[i]].yearOverYearGrowth = percentGrowth(
+        currentPeriodTotals[i - 1], 
+        currentPeriodTotals[i]
+      );
+    }
+
+    // Total active customers in current 3-year period
+    const totalCurrentPeriod = currentPeriodTotals.reduce((sum, total) => sum + total, 0);
+    
+    // Total active customers in previous 3-year period
+    const totalPreviousPeriod = previousPeriodTotals.reduce((sum, total) => sum + total, 0);
+
+    // Combined growth: comparing last 3 years (2023-2025) with previous 3 years (2020-2022)
+    const combinedThreeYearGrowth = percentGrowth(totalPreviousPeriod, totalCurrentPeriod);
+
+    // Growth from first year to last year in current period (2023 vs 2025)
+    const currentPeriodGrowth = percentGrowth(
+      currentPeriodTotals[0], 
+      currentPeriodTotals[currentPeriodTotals.length - 1]
+    );
+
+    return res.status(200).json({
+      view: "yearly",
+      summary: {
+        currentPeriod: {
+          years: currentThreeYears,
+          totalActiveCustomers: totalCurrentPeriod,
+          yearlyBreakdown: currentThreeYears.map((year, idx) => ({
+            year,
+            total: currentPeriodTotals[idx]
+          })),
+          growthFromFirstToLast: currentPeriodGrowth // 2023 to 2025
+        },
+        previousPeriod: {
+          years: previousThreeYears,
+          totalActiveCustomers: totalPreviousPeriod,
+          yearlyBreakdown: previousThreeYears.map((year, idx) => ({
+            year,
+            total: previousPeriodTotals[idx]
+          }))
+        },
+        combinedGrowthPercentage: combinedThreeYearGrowth // (2023-2025) vs (2020-2022)
+      },
+      datasets
     });
+
   } catch (error) {
     console.error("Error in getActiveCustomersPerYear:", error);
-    return res.status(500).json({
-      message: "Error fetching active customers per year",
-      error,
+    return res.status(500).json({ 
+      message: "Failed to fetch active customer analytics" 
     });
   }
 };
-
 /**
  * @swagger
  * /api/customers/total-per-year:
@@ -1548,147 +1930,259 @@ export const getActiveCustomersPerYear = async (
  *       500:
  *         description: Internal server error
  */
+
 export const getTotalCustomersPerYear = async (
   req: Request,
   res: Response
 ): Promise<any> => {
   try {
-    console.log("getTotalCustomersPerYear");
+    const view = (req.query.view as string)?.toLowerCase() || "yearly";
+    const now = new Date();
+    const currentYear = now.getFullYear();
 
-    const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | daily
-    const currentYear = new Date().getFullYear();
-    const compareYears = req.query.compareYears
-      ? (req.query.compareYears as string)
-          .split(",")
-          .map((y) => Number(y.trim()))
-      : [currentYear];
-
-    const datasets: Record<
-      number,
-      { label: string; data: { x: string; y: number }[] }
-    > = {};
-
-    // date range helpers
-    const getStartOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year":
-          return new Date(year, 0, 1, 0, 0, 0);
-        case "month":
-          return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        case "week":
-          return new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate() - 7,
-            0,
-            0,
-            0
-          );
-        case "day":
-          return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        default:
-          return new Date(year, 0, 1, 0, 0, 0);
-      }
+    const percentGrowth = (prev: number, curr: number) => {
+      if (prev === 0 && curr === 0) return 0;
+      if (prev === 0) return 100;
+      return Number((((curr - prev) / prev) * 100).toFixed(2));
     };
 
-    const getEndOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year":
-          return new Date(year, 11, 31, 23, 59, 59);
-        case "month":
-          return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        case "week":
-          return new Date();
-        case "day":
-          return new Date();
-        default:
-          return new Date(year, 11, 31, 23, 59, 59);
-      }
+    const applyGrowth = (data: any[]) => {
+      let prev = 0;
+      return data.map(d => {
+        const growth = percentGrowth(prev, d.y);
+        prev = d.y;
+        return { ...d, growth };
+      });
     };
 
-    for (const year of compareYears) {
-      let dateFormat = "MONTHNAME(customer.createdAt)";
-      let groupExpr = "MONTH(customer.createdAt)";
-      let startDate = getStartOf("year", year);
-      let endDate = getEndOf("year", year);
+    const calculateCombinedGrowth = (data: any[]) => {
+      const firstValue = data[0]?.y || 0;
+      const lastValue = data[data.length - 1]?.y || 0;
+      return percentGrowth(firstValue, lastValue);
+    };
 
-      switch (view.toLowerCase()) {
-        case "yearly":
-          dateFormat = "MONTHNAME(customer.createdAt)";
-          groupExpr = "MONTH(customer.createdAt)";
-          break;
-        case "quarterly":
-          dateFormat = "CONCAT('Q', QUARTER(customer.createdAt))";
-          groupExpr = "QUARTER(customer.createdAt)";
-          break;
-        case "monthly":
-          dateFormat = "DAY(customer.createdAt)";
-          groupExpr = "DAY(customer.createdAt)";
-          startDate = getStartOf("month");
-          endDate = getEndOf("month");
-          break;
-        case "weekly":
-          dateFormat = "DAYNAME(customer.createdAt)";
-          groupExpr = "DAYOFWEEK(customer.createdAt)";
-          startDate = getStartOf("week");
-          endDate = getEndOf("week");
-          break;
-        case "daily":
-        case "24hours":
-          dateFormat = "HOUR(customer.createdAt)";
-          groupExpr = "HOUR(customer.createdAt)";
-          startDate = getStartOf("day");
-          endDate = getEndOf("day");
-          break;
+    // YEARLY VIEW
+    if (view === "yearly") {
+      const years = [currentYear - 2, currentYear - 1, currentYear];
+      const monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const datasets: Record<number, any> = {};
+      const totalsPerYear: number[] = [];
+
+      for (const year of years) {
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31, 23, 59, 59);
+
+        const raw = await customerRepo
+          .createQueryBuilder("customer")
+          .select("MONTH(customer.createdAt)", "month")
+          .addSelect("COUNT(*)", "count")
+          .where("customer.isDelete = false")
+          .andWhere("customer.createdAt BETWEEN :start AND :end", {
+            start: startDate,
+            end: endDate,
+          })
+          .groupBy("MONTH(customer.createdAt)")
+          .orderBy("MONTH(customer.createdAt)", "ASC")
+          .getRawMany();
+
+        const monthData = monthLabels.map((m, i) => {
+          const record = raw.find(r => Number(r.month) === i + 1);
+          return { x: m, y: record ? Number(record.count) : 0 };
+        });
+
+        const monthDataWithGrowth = applyGrowth(monthData);
+        const total = monthDataWithGrowth.reduce((s, d) => s + d.y, 0);
+        totalsPerYear.push(total);
+
+        datasets[year] = {
+          label: year.toString(),
+          total,
+          data: monthDataWithGrowth,
+          growthPercentage: 0,
+        };
       }
 
-      const rawData = await customerRepo
-        .createQueryBuilder("customer")
-        .select(`${dateFormat}`, "label")
-        .addSelect("COUNT(*)", "count")
-        .where("customer.isDelete = :isDelete", { isDelete: false })
-        .andWhere("YEAR(customer.createdAt) = :year", { year })
-        .andWhere("customer.createdAt BETWEEN :startDate AND :endDate", {
-          startDate,
-          endDate,
-        })
-        .groupBy(groupExpr)
-        .orderBy(groupExpr, "ASC")
-        .getRawMany();
+      // Calculate year-over-year growth
+      for (let i = 1; i < years.length; i++) {
+        datasets[years[i]].growthPercentage = percentGrowth(
+          totalsPerYear[i - 1],
+          totalsPerYear[i]
+        );
+      }
 
-      const formattedData = rawData.map((r: any) => ({
-        x: r.label,
-        y: Number(r.count),
-      }));
+      const totalCustomersThreeYears = totalsPerYear.reduce((s, t) => s + t, 0);
+      const combinedGrowthThreeYears = percentGrowth(
+        totalsPerYear[0],
+        totalsPerYear[totalsPerYear.length - 1]
+      );
 
-      datasets[year] = {
-        label: year.toString(),
-        data: formattedData,
-      };
+      return res.status(200).json({
+        view: "yearly",
+        totalCustomersLastThreeYears: totalCustomersThreeYears,
+        combinedGrowthPercentageThreeYears: combinedGrowthThreeYears,
+        datasets,
+      });
     }
 
-    // Compute totals and growth
-    const latestYear = Math.max(...compareYears);
-    const total =
-      datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
-    const prevYear = latestYear - 1;
-    const prevTotal =
-      datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
-    const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
+    // 24 HOURS VIEW
+    if (view === "24hours" || view === "daily") {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+
+      const hourlyMap = new Map<string, number>();
+
+      // Initialize all 24 hours
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(endDate.getTime() - i * 60 * 60 * 1000);
+        const label = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          hour12: true
+        });
+        hourlyMap.set(label, 0);
+      }
+
+      const customers = await customerRepo
+        .createQueryBuilder("customer")
+        .select(["customer.createdAt"])
+        .where("customer.isDelete = false")
+        .andWhere("customer.createdAt BETWEEN :start AND :end", {
+          start: startDate,
+          end: endDate
+        })
+        .getMany();
+
+      for (const customer of customers) {
+        const hourLabel = new Date(customer.createdAt).toLocaleTimeString(
+          "en-US",
+          { hour: "numeric", hour12: true }
+        );
+        hourlyMap.set(
+          hourLabel,
+          (hourlyMap.get(hourLabel) || 0) + 1
+        );
+      }
+
+      const data = Array.from(hourlyMap.entries()).map(([x, y]) => ({ x, y }));
+      const dataWithGrowth = applyGrowth(data);
+      const totalCustomers24Hours = dataWithGrowth.reduce((s, d) => s + d.y, 0);
+
+      return res.status(200).json({
+        view,
+        totalCustomersLast24Hours: totalCustomers24Hours,
+        data: dataWithGrowth
+      });
+    }
+
+    // OTHER VIEWS (Monthly, Quarterly, Weekly)
+    let labels: string[] = [];
+    let groupExpr = "";
+    let startDate: Date;
+    let endDate: Date;
+    let periodStartDate: Date;
+    let periodEndDate: Date;
+
+    const currentMonth = now.getMonth();
+    
+    // Calculate current week number (1-52)
+    const startOfYear = new Date(currentYear, 0, 1);
+    const daysSinceStartOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+    const currentWeek = Math.ceil((daysSinceStartOfYear + startOfYear.getDay() + 1) / 7);
+    
+    const currentQuarter = Math.floor(currentMonth / 3) + 1;
+
+    switch (view) {
+      case "quarterly":
+        labels = ["Q1","Q2","Q3","Q4"];
+        groupExpr = "QUARTER(customer.createdAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current quarter dates
+        periodStartDate = new Date(currentYear, (currentQuarter - 1) * 3, 1);
+        periodEndDate = new Date(currentYear, currentQuarter * 3, 0, 23, 59, 59);
+        break;
+
+      case "monthly":
+        labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        groupExpr = "MONTH(customer.createdAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current month dates
+        periodStartDate = new Date(currentYear, currentMonth, 1);
+        periodEndDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+        break;
+
+      case "weekly":
+        labels = Array.from({ length: 52 }, (_, i) => `W${i + 1}`);
+        groupExpr = "WEEK(customer.createdAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current week dates (approximation)
+        periodStartDate = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+        periodStartDate.setHours(0, 0, 0, 0);
+        periodEndDate = new Date(periodStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+        periodEndDate.setHours(23, 59, 59, 999);
+        break;
+
+      default:
+        return res.status(400).json({ message: "Invalid view" });
+    }
+
+    // Get full year data
+    const raw = await customerRepo
+      .createQueryBuilder("customer")
+      .select(groupExpr, "bucket")
+      .addSelect("COUNT(*)", "count")
+      .where("customer.isDelete = false")
+      .andWhere("customer.createdAt BETWEEN :start AND :end", { 
+        start: startDate, 
+        end: endDate 
+      })
+      .groupBy(groupExpr)
+      .orderBy(groupExpr, "ASC")
+      .getRawMany();
+
+    const series = labels.map((label, idx) => {
+      const record = raw.find(r => Number(r.bucket) === idx + 1);
+      return { x: label, y: record ? Number(record.count) : 0 };
+    });
+
+    const seriesWithGrowth = applyGrowth(series);
+    const totalCustomersCurrentYear = seriesWithGrowth.reduce((s, d) => s + d.y, 0);
+    const combinedGrowth = calculateCombinedGrowth(seriesWithGrowth);
+
+    // Get current period data
+    const periodCount = await customerRepo
+      .createQueryBuilder("customer")
+      .where("customer.isDelete = false")
+      .andWhere("customer.createdAt BETWEEN :start AND :end", { 
+        start: periodStartDate, 
+        end: periodEndDate 
+      })
+      .getCount();
+
+    let periodLabel = "";
+    if (view === "monthly") {
+      periodLabel = labels[currentMonth];
+    } else if (view === "quarterly") {
+      periodLabel = `Q${currentQuarter}`;
+    } else if (view === "weekly") {
+      periodLabel = `W${currentWeek}`;
+    }
 
     return res.status(200).json({
-      totalCustomers: total,
-      growthPercentage: Number(growth.toFixed(2)),
-      datasets,
+      view,
+      totalCustomersCurrentYear,
+      combinedGrowthPercentageCurrentYear: combinedGrowth,
+      currentPeriod: {
+        label: periodLabel,
+        totalCustomers: periodCount
+      },
+      data: seriesWithGrowth,
     });
+
   } catch (error) {
-    console.error("Error in getTotalCustomersPerYear:", error);
-    return res.status(500).json({
-      message: "Error fetching total customers per year",
-      error: error instanceof Error ? error.message : error,
-    });
+    console.error("getTotalCustomersPerYear error:", error);
+    return res.status(500).json({ message: "Failed to fetch customer analytics" });
   }
 };
 
@@ -1760,145 +2254,255 @@ export const getRevenueTrend = async (
   res: Response
 ): Promise<any> => {
   try {
-    console.log("getRevenueTrend");
+    const view = (req.query.view as string)?.toLowerCase() || "yearly";
+    const now = new Date();
+    const currentYear = now.getFullYear();
 
-    const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | 24hours
-    const currentYear = new Date().getFullYear();
-
-    const compareYears = req.query.compareYears
-      ? (req.query.compareYears as string)
-          .split(",")
-          .map((y) => Number(y.trim()))
-      : [currentYear];
-
-    const datasets: Record<
-      number,
-      { label: string; data: { x: string; y: number }[] }
-    > = {};
-
-    // 🧭 Helper functions for date ranges
-    const getStartOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year":
-          return new Date(year, 0, 1, 0, 0, 0);
-        case "month":
-          return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        case "week":
-          return new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate() - 7,
-            0,
-            0,
-            0
-          );
-        case "day":
-          return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        default:
-          return new Date(year, 0, 1, 0, 0, 0);
-      }
+    const percentGrowth = (prev: number, curr: number) => {
+      if (prev === 0 && curr === 0) return 0;
+      if (prev === 0) return 100;
+      return Number((((curr - prev) / prev) * 100).toFixed(2));
     };
 
-    const getEndOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year":
-          return new Date(year, 11, 31, 23, 59, 59);
-        case "month":
-          return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        case "week":
-          return new Date();
-        case "day":
-          return new Date();
-        default:
-          return new Date(year, 11, 31, 23, 59, 59);
-      }
+    const applyGrowth = (data: { x: string; y: number }[]) => {
+      let prev = 0;
+      return data.map(d => {
+        const growth = percentGrowth(prev, d.y);
+        prev = d.y;
+        return { ...d, growth };
+      });
     };
 
-    for (const year of compareYears) {
-      let dateFormat = "MONTHNAME(transaction.transactionDate)";
-      let groupExpr = "MONTH(transaction.transactionDate)";
-      let startDate = getStartOf("year", year);
-      let endDate = getEndOf("year", year);
+    const calculateCombinedGrowth = (data: any[]) => {
+      const firstValue = data[0]?.y || 0;
+      const lastValue = data[data.length - 1]?.y || 0;
+      return percentGrowth(firstValue, lastValue);
+    };
 
-      switch (view.toLowerCase()) {
-        case "yearly":
-          dateFormat = "MONTHNAME(transaction.transactionDate)";
-          groupExpr = "MONTH(transaction.transactionDate)";
-          break;
-        case "quarterly":
-          dateFormat = "CONCAT('Q', QUARTER(transaction.transactionDate))";
-          groupExpr = "QUARTER(transaction.transactionDate)";
-          break;
-        case "monthly":
-          dateFormat = "DAY(transaction.transactionDate)";
-          groupExpr = "DAY(transaction.transactionDate)";
-          startDate = getStartOf("month");
-          endDate = getEndOf("month");
-          break;
-        case "weekly":
-          dateFormat = "DAYNAME(transaction.transactionDate)";
-          groupExpr = "DAYOFWEEK(transaction.transactionDate)";
-          startDate = getStartOf("week");
-          endDate = getEndOf("week");
-          break;
-        case "24hours":
-          dateFormat = "HOUR(transaction.transactionDate)";
-          groupExpr = "HOUR(transaction.transactionDate)";
-          startDate = getStartOf("day");
-          endDate = getEndOf("day");
-          break;
+    // 24 HOURS VIEW
+    if (view === "24hours" || view === "daily") {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+
+      const hourlyMap = new Map<string, number>();
+
+      // Initialize all 24 hours
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(endDate.getTime() - i * 60 * 60 * 1000);
+        const label = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          hour12: true
+        });
+        hourlyMap.set(label, 0);
       }
 
-      const rawData = await transactionRepo
-        .createQueryBuilder("transaction")
-        .select(`${dateFormat}`, "label")
-        .addSelect("COALESCE(SUM(transaction.amount), 0)", "revenue")
-        .where("transaction.isDeleted = :isDeleted", { isDeleted: false })
-        .andWhere("transaction.status = :status", { status: "completed" })
-        .andWhere("YEAR(transaction.transactionDate) = :year", { year })
-        .andWhere(
-          "transaction.transactionDate BETWEEN :startDate AND :endDate",
-          {
-            startDate,
-            endDate,
-          }
-        )
-        .groupBy(groupExpr)
-        .orderBy(groupExpr, "ASC")
-        .getRawMany();
+      const transactions = await transactionRepo
+        .createQueryBuilder("t")
+        .select(["t.amount", "t.transactionDate"])
+        .where("t.isDeleted = false")
+        .andWhere("t.status = 'completed'")
+        .andWhere("t.transactionDate BETWEEN :s AND :e", {
+          s: startDate,
+          e: endDate
+        })
+        .getMany();
 
-      const formattedData = rawData.map((r: any) => ({
-        x: r.label,
-        y: Number(r.revenue),
-      }));
+      for (const tx of transactions) {
+        const hourLabel = new Date(tx.transactionDate).toLocaleTimeString(
+          "en-US",
+          { hour: "numeric", hour12: true }
+        );
+        hourlyMap.set(
+          hourLabel,
+          (hourlyMap.get(hourLabel) || 0) + Number(tx.amount)
+        );
+      }
 
-      datasets[year] = {
-        label: year.toString(),
-        data: formattedData,
-      };
+      const data = Array.from(hourlyMap.entries()).map(([x, y]) => ({ x, y }));
+      const dataWithGrowth = applyGrowth(data);
+      const totalRevenue24Hours = dataWithGrowth.reduce((s, d) => s + d.y, 0);
+
+      return res.status(200).json({
+        view,
+        totalRevenueLast24Hours: totalRevenue24Hours,
+        transactionCount: transactions.length,
+        data: dataWithGrowth
+      });
     }
 
-    // 📈 Totals & growth calculation
-    const latestYear = Math.max(...compareYears);
-    const total =
-      datasets[latestYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
-    const prevYear = latestYear - 1;
-    const prevTotal =
-      datasets[prevYear]?.data.reduce((sum, d) => sum + d.y, 0) || 0;
-    const growth = prevTotal ? ((total - prevTotal) / prevTotal) * 100 : 0;
+    // YEARLY VIEW
+    if (view === "yearly") {
+      const years = [currentYear - 2, currentYear - 1, currentYear];
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const datasets: Record<number, any> = {};
+      const totals: number[] = [];
+
+      for (const year of years) {
+        const start = new Date(year, 0, 1);
+        const end = new Date(year, 11, 31, 23, 59, 59);
+
+        const raw = await transactionRepo
+          .createQueryBuilder("t")
+          .select("MONTH(t.transactionDate)", "bucket")
+          .addSelect("SUM(t.amount)", "revenue")
+          .where("t.isDeleted = false")
+          .andWhere("t.status = 'completed'")
+          .andWhere("t.transactionDate BETWEEN :s AND :e", { s: start, e: end })
+          .groupBy("bucket")
+          .getRawMany();
+
+        const series = months.map((m, i) => {
+          const r = raw.find(x => Number(x.bucket) === i + 1);
+          return { x: m, y: r ? Number(r.revenue) : 0 };
+        });
+
+        const data = applyGrowth(series);
+        const total = data.reduce((s, d) => s + d.y, 0);
+        totals.push(total);
+
+        datasets[year] = {
+          label: String(year),
+          total,
+          data,
+          growthPercentage: 0
+        };
+      }
+
+      // Calculate year-over-year growth
+      for (let i = 1; i < years.length; i++) {
+        datasets[years[i]].growthPercentage = percentGrowth(
+          totals[i - 1],
+          totals[i]
+        );
+      }
+
+      const totalRevenueThreeYears = totals.reduce((s, t) => s + t, 0);
+      const combinedGrowthThreeYears = percentGrowth(
+        totals[0],
+        totals[totals.length - 1]
+      );
+
+      return res.status(200).json({
+        view,
+        totalRevenueLastThreeYears: totalRevenueThreeYears,
+        combinedGrowthPercentageThreeYears: combinedGrowthThreeYears,
+        datasets
+      });
+    }
+
+    // OTHER VIEWS (Monthly, Quarterly, Weekly)
+    let labels: string[] = [];
+    let groupExpr = "";
+    let startDate!: Date;
+    let endDate!: Date;
+    let periodStartDate!: Date;
+    let periodEndDate!: Date;
+
+    const currentMonth = now.getMonth();
+    
+    // Calculate current week number (1-52)
+    const startOfYear = new Date(currentYear, 0, 1);
+    const daysSinceStartOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+    const currentWeek = Math.ceil((daysSinceStartOfYear + startOfYear.getDay() + 1) / 7);
+    
+    const currentQuarter = Math.floor(currentMonth / 3) + 1;
+
+    switch (view) {
+      case "monthly":
+        labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        groupExpr = "MONTH(t.transactionDate)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current month dates
+        periodStartDate = new Date(currentYear, currentMonth, 1);
+        periodEndDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+        break;
+
+      case "quarterly":
+        labels = ["Q1","Q2","Q3","Q4"];
+        groupExpr = "QUARTER(t.transactionDate)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current quarter dates
+        periodStartDate = new Date(currentYear, (currentQuarter - 1) * 3, 1);
+        periodEndDate = new Date(currentYear, currentQuarter * 3, 0, 23, 59, 59);
+        break;
+
+      case "weekly":
+        labels = Array.from({ length: 52 }, (_, i) => `W${i + 1}`);
+        groupExpr = "WEEK(t.transactionDate)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        // Current week dates (approximation)
+        periodStartDate = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+        periodStartDate.setHours(0, 0, 0, 0);
+        periodEndDate = new Date(periodStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+        periodEndDate.setHours(23, 59, 59, 999);
+        break;
+
+      default:
+        return res.status(400).json({ message: "Invalid view" });
+    }
+
+    // Get full year data
+    const raw = await transactionRepo
+      .createQueryBuilder("t")
+      .select(groupExpr, "bucket")
+      .addSelect("SUM(t.amount)", "revenue")
+      .where("t.isDeleted = false")
+      .andWhere("t.status = 'completed'")
+      .andWhere("t.transactionDate BETWEEN :s AND :e", {
+        s: startDate,
+        e: endDate
+      })
+      .groupBy("bucket")
+      .getRawMany();
+
+    const series = labels.map((label, i) => {
+      const r = raw.find(x => Number(x.bucket) === i + 1);
+      return { x: label, y: r ? Number(r.revenue) : 0 };
+    });
+
+    const data = applyGrowth(series);
+    const totalRevenueCurrentYear = data.reduce((s, d) => s + d.y, 0);
+    const combinedGrowth = calculateCombinedGrowth(data);
+
+    // Get current period revenue
+    const periodResult = await transactionRepo
+      .createQueryBuilder("t")
+      .select("SUM(t.amount)", "revenue")
+      .where("t.isDeleted = false")
+      .andWhere("t.status = 'completed'")
+      .andWhere("t.transactionDate BETWEEN :s AND :e", {
+        s: periodStartDate,
+        e: periodEndDate
+      })
+      .getRawOne();
+
+    const periodRevenue = periodResult?.revenue ? Number(periodResult.revenue) : 0;
+
+    let periodLabel = "";
+    if (view === "monthly") {
+      periodLabel = labels[currentMonth];
+    } else if (view === "quarterly") {
+      periodLabel = `Q${currentQuarter}`;
+    } else if (view === "weekly") {
+      periodLabel = `W${currentWeek}`;
+    }
 
     return res.status(200).json({
-      totalRevenue: Number(total.toFixed(2)),
-      growthPercentage: Number(growth.toFixed(2)),
-      datasets,
+      view,
+      totalRevenueCurrentYear,
+      combinedGrowthPercentageCurrentYear: combinedGrowth,
+      currentPeriod: {
+        label: periodLabel,
+        totalRevenue: periodRevenue
+      },
+      data
     });
+
   } catch (error) {
-    console.error("Error in getRevenueTrend:", error);
-    return res.status(500).json({
-      message: "Error fetching revenue trends",
-      error: error instanceof Error ? error.message : error,
-    });
+    console.error("getRevenueTrend error:", error);
+    return res.status(500).json({ message: "Failed to fetch revenue analytics" });
   }
 };
