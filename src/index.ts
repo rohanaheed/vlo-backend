@@ -9,6 +9,7 @@ import customerRoutes from "./routes/customerRoutes";
 import businessRoutes from "./routes/businessRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
 import packageRoutes from "./routes/packageRoutes";
+import orderRoutes from "./routes/orderRoutes";
 import invoiceRoutes from "./routes/invoiceRoutes";
 import creditNotesRoutes from "./routes/creditNotesRoutes";
 import noteRoutes from "./routes/noteRoutes";
@@ -24,8 +25,16 @@ import preSignupMatricRoutes from "./routes/preSignupMatricRoutes";
 import marketingRoutes from "./routes/marketingRoutes";
 import currencyRoutes from "./routes/currencyRoutes";
 import userGroupRoutes from "./routes/userGroupRoutes";
+import { handleStripeWebhook } from "./controllers/stripWebhookController";
 
 const app = express();
+
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook
+);
+
 app.use(express.json({ limit: "20mb" }));
 app.use(
   cors({
@@ -702,6 +711,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/stripe", paymentRoutes);
+app.use("/api/orders", orderRoutes)
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/credit-notes", creditNotesRoutes);
 app.use("/api/notes", noteRoutes);

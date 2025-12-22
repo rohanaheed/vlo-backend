@@ -42,7 +42,7 @@ import { EmailPerformance } from "../entity/EmailPerformance"
 import { SocialMediaPerformance } from "../entity/SocialMediaPerformance"
 import { SMSPerformance } from "../entity/SMSPerformance"
 import { GoogleAdsPerformance } from "../entity/GoogleAdsPerformance"
-import { CustomerAddOn } from "../entity/CustomerAddOn";
+import { CustomerPackage } from "../entity/CustomerPackage";
 import { UserGroup } from "../entity/UserGroup";
 
 export const AppDataSource = new DataSource({
@@ -64,7 +64,7 @@ export const AppDataSource = new DataSource({
     Transaction,
     User,
     Customer,
-    CustomerAddOn,
+    CustomerPackage,
     BusinessEntity,
     BusinessType,
     BusinessPracticeArea,
