@@ -23,9 +23,6 @@ export class Customer {
   createdByUserId!: number;
 
   @Column({ default: "" })
-  logo!: string;
-
-  @Column({ default: "" })
   title!: string; // Mr, Mrs, Ms, Dr
 
   @Column({ default: "" })
@@ -117,7 +114,7 @@ export class Customer {
 
   @Column({ default: 0 })
   packageId!: number;
-
+  
   @CreateDateColumn()
   expiryDate!: Date;
 
