@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
-export type SubscriptionType = "Free" | "Trial" | "Public Limited Company";
+export type SubscriptionStatus = "inactive" | "active" | "past_due" | "expired" | "cancelled";
 
 @Entity()
 export class Subscription {
@@ -8,12 +8,28 @@ export class Subscription {
   id!: number;
 
   @Column()
-  packageId!: number;
+  customerPackageId!: number;
 
   @Column()
   customerId!: number;
-  
-  @Column({default: false})
+
+  @Column()
+  currencyId!: number;
+
+  @Column({ type: "timestamp" })
+  startDate!: Date;
+
+  @Column({ type: "timestamp" })
+  endDate!: Date;
+
+  @Column({
+    type: "enum",
+    enum: ["inactive", "active", "past_due", "expired", "cancelled"],
+    default: "inactive",
+  })
+  status!: SubscriptionStatus;
+
+  @Column({ default: false })
   autoRenew!: boolean;
 
   @Column({ default: false })

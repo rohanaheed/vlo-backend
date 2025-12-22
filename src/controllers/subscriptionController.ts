@@ -63,15 +63,15 @@ const subscriptionRepo = AppDataSource.getRepository(Subscription);
  */
 export const createSubscription = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { packageId, customerId } = req.body;
-    if (!packageId || !customerId) {
+    const { customerPackageId, customerId } = req.body;
+    if (!customerPackageId || !customerId) {
       return res.status(400).json({
         success: false,
-        message: "packageId and customerId are required"
+        message: " customerPackageId and customerId are required"
       });
     }
     const subscription = subscriptionRepo.create({
-      packageId,
+      customerPackageId,
       customerId,
       isDelete: false
     });
@@ -265,7 +265,7 @@ export const getSubscriptionById = async (req: Request, res: Response): Promise<
 export const updateSubscription = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-    const { packageId, customerId } = req.body;
+    const { customerPackageId, customerId } = req.body;
     const subscription = await subscriptionRepo.findOne({
       where: { id: +id, isDelete: false }
     });
@@ -275,7 +275,7 @@ export const updateSubscription = async (req: Request, res: Response): Promise<a
         message: "Subscription not found"
       });
     }
-    if (packageId !== undefined) subscription.packageId = packageId;
+    if (customerPackageId !== undefined) subscription.customerPackageId = customerPackageId;
     if (customerId !== undefined) subscription.customerId = customerId;
     subscription.updatedAt = new Date();
     const updated = await subscriptionRepo.save(subscription);
