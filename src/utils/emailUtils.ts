@@ -365,3 +365,111 @@ export const sendCustomerLoginCredentials = async (
     return false;
   }
 };
+export const sendCustomerInvoiceEmail = async (
+  customer: {
+    name: string;
+    email: string;
+  },
+  invoice: {
+    invoiceNumber: string;
+    amount: number;
+    outstandingBalance: number;
+    paymentStatus: "paid" | "unpaid" | "pending" | "cancelled" | "failed";
+    createdAt: Date;
+    dueDate: Date;
+  },
+  pdfBytes: Uint8Array,
+  currency?: {
+    currencySymbol: string;
+    currencyCode: string;
+  },
+): Promise<boolean> => {
+  try {
+    const symbol = currency?.currencySymbol || "$";
+    const code = currency?.currencyCode || "USD";
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || "noreply@yourcompany.com",
+      to: customer.email,
+      subject: `Invoice ${invoice.invoiceNumber} - ${
+        invoice.paymentStatus === "paid" ? "Paid" : "Payment Due"
+      }`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          
+          <div style="background-color: #4f46e5; padding: 20px; color: #fff;">
+            <h2 style="margin: 0;">Invoice ${invoice.invoiceNumber}</h2>
+          </div>
+
+          <div style="padding: 20px; background-color: #ffffff;">
+            <p>Dear ${customer.name},</p>
+
+            <p>
+              Please find attached your invoice for 
+              <strong>${symbol}${invoice.amount.toFixed(2)} ${code}</strong>.
+            </p>
+
+            <p><strong>Invoice Details:</strong></p>
+
+            <ul>
+              <li><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</li>
+              <li><strong>Date:</strong> ${new Date(invoice.createdAt).toLocaleDateString()}</li>
+              <li><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString()}</li>
+              <li><strong>Amount:</strong> ${symbol}${invoice.amount.toFixed(2)} ${code}</li>
+              <li><strong>Status:</strong> ${invoice.paymentStatus}</li>
+            </ul>
+
+            ${
+              invoice.paymentStatus !== "paid"
+                ? `
+                  <p>
+                    <strong>
+                      Amount Due: ${symbol}${invoice.outstandingBalance.toFixed(2)} ${code}
+                    </strong>
+                  </p>
+                  <p>
+                    Please make payment by 
+                    ${new Date(invoice.dueDate).toLocaleDateString()}.
+                  </p>
+                `
+                : `
+                  <p>
+                    <strong>This invoice has been paid. Thank you!</strong>
+                  </p>
+                `
+            }
+
+            <p>
+              If you have any questions, please contact our support team.
+            </p>
+
+            <p>
+              Best regards,<br />
+              Your Company Name
+            </p>
+          </div>
+
+          <div style="background-color: #f3f4f6; padding: 15px; text-align: center;">
+            <p style="font-size: 12px; color: #666; margin: 0;">
+              This is an automated email. Please do not reply.
+            </p>
+          </div>
+
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `invoice-${invoice.invoiceNumber}.pdf`,
+          content: Buffer.from(pdfBytes),
+          contentType: "application/pdf",
+        },
+      ],
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error("Error sending invoice email:", error);
+    return false;
+  }
+};
