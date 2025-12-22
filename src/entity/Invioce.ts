@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
+export type PaymentStatus = "unpaid" | "paid" | "pending" | "cancelled" | "failed"
 
 @Entity()
 export class Invoice {
@@ -19,8 +20,8 @@ export class Invoice {
   })
   status!: string;
 
-  @Column({ default: "unpaid" })
-  paymentStatus!: string;
+  @Column({ type: "enum", enum: ["unpaid", "paid", "pending", "cancelled", "failed"], default: "unpaid" })
+  paymentStatus!: PaymentStatus;
 
   @Column({ default: "" })
   plan!: string;
