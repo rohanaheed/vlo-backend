@@ -8,7 +8,11 @@ import {
   getInvoiceStats,
   getInvoicesByCustomer,
   markInvoiceAsBad,
-  getVatStats
+  getVatStats,
+  sendInvoice,
+  downloadInvoicePDF,
+  cancelInvoice,
+  getInvoiceForPayment
 } from "../controllers/invoiceController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -42,5 +46,17 @@ router.put("/:id/mark-bad", authorize(["super_admin"]), asyncHandler(markInvoice
 
 // Delete invoice (soft delete)
 router.delete("/:id", authorize(["super_admin"]), asyncHandler(deleteInvoice));
+
+// Fetch invoice details for payment
+router.get("/details/:orderId", authorize(["super_admin", "user"]), asyncHandler(getInvoiceForPayment));
+
+// Send Invoice
+router.post("/:invoiceId/send-invoice/:customerId", authorize(["super_admin"]), asyncHandler(sendInvoice));
+
+// Download Invoice
+router.post("/:invoiceId/download-pdf/:customerId", authorize(["super_admin"]), asyncHandler(downloadInvoicePDF));
+
+// Cancel Invoice
+router.post("/cancel/:invoiceId", authorize(["super_admin"]), asyncHandler(cancelInvoice));
 
 export default router; 

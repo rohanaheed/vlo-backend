@@ -2,7 +2,6 @@ import { Router } from "express";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { validateRequest } from "../middleware/validateRequest";
-import { handleStripeWebhook } from "../controllers/stripWebhookController";
 import {
   createPayment,
   getCustomerPayments,
@@ -13,11 +12,10 @@ import {
   getDefaultPayment
 } from "../controllers/paymentMethodController";
 import { paymentSchema, updatePaymentSchema } from "../utils/validators/inputValidator";
+import { paymentNow } from "../controllers/paymentController";
+import { handleStripeWebhook } from "../controllers/stripWebhookController";
 
 const router = Router();
-// Existing Stripe webhook routes
-router.post("/webhook", authorize(["super_admin"]), asyncHandler(handleStripeWebhook));
-// router.post("/intent", authorize(["super_admin"]), asyncHandler(createPaymentIntent));
 
 // Payment method CRUD routes
 router.post("/methods", authorize(["super_admin", "user"]), validateRequest(paymentSchema), asyncHandler(createPayment));
@@ -34,5 +32,11 @@ router.delete("/methods/:id", authorize(["super_admin", "user"]), asyncHandler(d
 router.patch("/methods/:id/set-default", authorize(["super_admin", "user"]), asyncHandler(setDefaultPayment));
 
 router.get("/methods/customer/:customerId/default", authorize(["super_admin", "user"]), asyncHandler(getDefaultPayment));
+
+router.post(
+  "/payment-now",
+  authorize(["super_admin", "user"]),
+  asyncHandler(paymentNow)
+);
 
 export default router;
