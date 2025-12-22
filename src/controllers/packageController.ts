@@ -4,10 +4,12 @@ import { Package } from "../entity/Package";
 import { PackageModule } from "../entity/PackageModule";
 import { Customer } from "../entity/Customer";
 import { Currency } from "../entity/Currency";
+import { CustomerPackage } from "../entity/CustomerPackage";
 
 const packageRepo = AppDataSource.getRepository(Package);
 const packageModuleRepo = AppDataSource.getRepository(PackageModule);
 const customerRepo = AppDataSource.getRepository(Customer);
+const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
 const currencyRepo = AppDataSource.getRepository(Currency);
 
 /**
@@ -752,38 +754,36 @@ export const getPackagesByBillingCycle = async (req: Request, res: Response): Pr
   return res.json(packages);
 };
 
-export const getPackagesForCustomer = async (req : Request, res: Response): Promise<any> => {
-    try {
-      const {customerId} = req.params
-      // Get Customer 
-      const customer = await customerRepo.findOne({ where : { id : Number(customerId) } })
-      // Get Currency
-      const currency = await currencyRepo.findOne( { where : { id : customer?.currencyId } } )
-      // Get Packages 
-      const packages = await packageRepo.find({ where : { isActive : true, isDelete : false } })
-      
-      // Validate Customer, Currency and Packages Exist
-      if(!customer){
-        return res.status(404).json({
-          success : false,
-          message : "Customer Not Found"
-        })
-      }
-      if(!currency){
-        return res.status(404).json({
-          success : false,
-          message : "Currency Not Found"
-        })
-      }
-      if(!packages){
-        return res.status(404).json({
-          success : false,
-          message : "No Package Found"
-        })
-      }
-      // Convert Package Prices based on Customer Currency
-      const convertedPackages = packages.map((pkg => ({
-        id : pkg.id,
+export const getPackagesForCustomer = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { customerId } = req.params;
+
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId), isDelete: false }
+    });
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
+    }
+
+    const currency = await currencyRepo.findOne({
+      where: { id: customer.currencyId }
+    });
+    if (!currency) {
+      return res.status(404).json({ success: false, message: "Currency not found" });
+    }
+
+    const packages = await packageRepo.find({
+      where: { isActive: true, isDelete: false }
+    });
+
+    if (!packages.length) {
+      return res.status(404).json({ success: false, message: "No packages found" });
+    }
+    const data = packages.map(pkg => ({
+         id : pkg.id,
         name : pkg.name,
         type : pkg.type,
         description : pkg.description,
@@ -810,17 +810,18 @@ export const getPackagesForCustomer = async (req : Request, res: Response): Prom
         extraAddOns : pkg.extraAddOn,
         currency : currency.currencyCode,
         currencySymbol : currency.currencySymbol
-      })))
+    }));
 
-      return res.status(201).json({
-        success : true,
-        data : convertedPackages,
-        message : "Packages Fetched Successfully for Customer"
-      })
-    } catch (err: any) {
-      return res.status(500).json({ message: "Server error", error: err.message });
+    return res.status(200).json({
+      success: true,
+      data,
+      message: "Packages fetched successfully"
+    });
+
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
   }
-}
+};
 
 export const getCustomerSelectedPackage = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -830,8 +831,12 @@ export const getCustomerSelectedPackage = async (req: Request, res: Response): P
     const customer = await customerRepo.findOne({
       where: { id: Number(customerId) }
     });
+    // Get Customer Selected Package
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: Number(customerId), isDelete: false }
+    });
 
-    if (!customer || !customer.packageId) {
+    if (!customer || !customerPackage?.packageId) {
       return res.status(404).json({
         success: false,
         message: "Package not selected"
@@ -852,7 +857,7 @@ export const getCustomerSelectedPackage = async (req: Request, res: Response): P
 
     // Get Package
     const pkg = await packageRepo.findOne({
-      where: { id: customer.packageId }
+      where: { id: customerPackage.packageId }
     });
 
     if (!pkg) {
@@ -888,73 +893,64 @@ export const getCustomerSelectedPackage = async (req: Request, res: Response): P
   }
 };
 
-export const getCustomerSelectedPackageAddOns = async (req: Request, res: Response): Promise<any> => {
+export const getAddOnsForSelectedPackage = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { customerId } = req.params;
 
-    // Get Customer
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { 
+        customerId: Number(customerId), 
+        isDelete: false
+       }
+    });
+
+    if (!customerPackage) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select a package first"
+      });
+    }
+
     const customer = await customerRepo.findOne({
-      where: { id: Number(customerId) }
+      where: { id: Number(customerId), isDelete: false }
     });
 
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer Not Found"
-      });
-    }
-
-    // Get Currency of Customer
     const currency = await currencyRepo.findOne({
-      where: { id: customer.currencyId }
+      where: { id: customer?.currencyId }
     });
 
-    if (!currency) {
-      return res.status(404).json({
-        success: false,
-        message: "Currency Not Found"
-      });
-    }
-
-    // Get Selected Package
-    const packageSelected = await packageRepo.findOne({
-      where: { id: customer.packageId }
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage.packageId }
     });
 
-    if (!packageSelected) {
-      return res.status(404).json({
-        success: false,
-        message: "Package Selected by Customer Not Found"
-      });
+    if (!pkg || !currency) {
+      return res.status(404).json({ success: false, message: "Data not found" });
     }
 
-    // Convert Extra Add-Ons Prices
-    const convertedAddOns = (packageSelected.extraAddOn || []).map(addOn => ({
+    const addOns = (pkg.extraAddOn || []).map(addOn => ({
       module: addOn.module,
       feature: addOn.feature,
       description: addOn.description,
-      discount: addOn.discount || 0,
       monthlyPrice: Number((addOn.monthlyPrice || 0) * currency.exchangeRate).toFixed(2),
       yearlyPrice: Number((addOn.yearlyPrice || 0) * currency.exchangeRate).toFixed(2),
+      discount: addOn.discount || 0,
       currencyCode: currency.currencyCode,
       currencySymbol: currency.currencySymbol
     }));
 
     return res.status(200).json({
       success: true,
-      data: convertedAddOns,
-      message: "Extra Add-Ons fetched successfully"
+      data: addOns,
+      message: "Available add-ons fetched"
     });
 
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: err.message
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 /**
  * @openapi

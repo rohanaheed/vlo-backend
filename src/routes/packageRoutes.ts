@@ -15,7 +15,7 @@ import {
   getPackageModuleById,
   updatePackageModule,
   getPackagesForCustomer,
-  getCustomerSelectedPackageAddOns,
+  getAddOnsForSelectedPackage,
   getCustomerSelectedPackage
 } from "../controllers/packageController";
 import { validateRequest } from "../middleware/validateRequest";
@@ -69,7 +69,7 @@ router.get("/list/:customerId", authorize(["super_admin", "user"]), asyncHandler
 router.get("/customer-package/:customerId", authorize(["super_admin", "user"]), asyncHandler(getCustomerSelectedPackage));
 
 // Get packages extra addons for customer
-router.get("/addons/:customerId", authorize(["super_admin", "user"]), asyncHandler(getCustomerSelectedPackageAddOns));
+router.get("/addons/:customerId", authorize(["super_admin", "user"]), asyncHandler(getAddOnsForSelectedPackage));
 
 // Package Module Routes
 
