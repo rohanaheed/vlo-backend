@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
+export type OrderStatus = "pending" | "completed" | "incomplete" | "cancelled" | "processing" | "failed";
 
 @Entity()
 export class Order {
@@ -9,13 +10,13 @@ export class Order {
   @Column({ default: 0 })
   customerId!: number;
 
-  @Column({ default: 0 })
-  orderNumber!: number;
+  @Column({ type: "varchar", length: 50 })
+  orderNumber!: string; 
 
-  @Column({ default: "" })
-  originalOrderNumber!: string;
+  @Column({ type: "varchar", length: 50 })
+  originalOrderNumber!: string; 
 
-  @Column({ default: "" })
+  @Column({ type: "varchar", length: 30 })
   orderDate!: string;
 
   @Column({ default: 0 })
@@ -30,8 +31,8 @@ export class Order {
   @Column({ default: 0 })
   total!: number;
 
-  @Column({ default: "pending" })
-  status!: string;
+  @Column({ type: "enum", enum: ["pending","completed","incomplete","cancelled","processing","failed"], default: "pending" })
+  status!: OrderStatus;
 
   @Column({ default: 0 })
   currencyId!: number;
@@ -42,7 +43,7 @@ export class Order {
   @Column({ default: 0 })
   addedBy!: number;
 
-  @Column({ default: "" })
+  @Column({ type: "varchar", length: 50 })
   customOrderNumber!: string;
 
   @Column()
