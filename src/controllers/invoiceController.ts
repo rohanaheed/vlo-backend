@@ -8,11 +8,17 @@ import { invoiceSchema, updateInvoiceSchema } from '../utils/validators/inputVal
 import { Between } from 'typeorm';
 import { uploadFileToS3, removeFileFromS3 } from '../utils/s3Utils';
 import path from 'path';
+import { CustomerPackage } from '../entity/CustomerPackage';
+import { Package } from '../entity/Package';
+import { generateInvoicePDF } from '../utils/pdfUtils';
+import { sendCustomerInvoiceEmail } from '../utils/emailUtils';
 
 const invoiceRepo = AppDataSource.getRepository(Invoice);
 const customerRepo = AppDataSource.getRepository(Customer);
 const currencyRepo = AppDataSource.getRepository(Currency);
 const orderRepo = AppDataSource.getRepository(Order);
+const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
+const packageRepo = AppDataSource.getRepository(Package)
 
 /**
  * @swagger
@@ -194,6 +200,425 @@ export const createInvoice = async (req: Request, res: Response): Promise<any> =
   }
 };
 
+export const getInvoiceForPayment = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { orderId } = req.params;
+
+    //GET INVOICE
+    const invoice = await invoiceRepo.findOne({
+      where: { orderId: Number(orderId), isDelete: false }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    // GET CUSTOMER
+    const customer = await customerRepo.findOne({
+      where: { id: invoice.customerId, isDelete: false }
+    });
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
+    }
+
+    // GET ORDER
+    const order = await orderRepo.findOne({
+      where: { id: invoice.orderId, isDelete: false }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // GET CURRENENCY
+    const currency = await currencyRepo.findOne({
+      where: { id: invoice.currencyId, isDelete: false }
+    });
+
+    if (!currency) {
+      return res.status(404).json({ success: false, message: "Currency not found" });
+    }
+    
+    // FETCH PACKAGE & ADDONS
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: customer.id, isDelete: false }
+    });
+
+    if (!customerPackage) {
+      return res.status(404).json({ success: false, message: "Customer package not found" });
+    }
+
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage.packageId, isDelete: false }
+    });
+
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: "Package not found" });
+    }
+
+    const exchangeRate = Number(currency.exchangeRate || 1);
+    const billingCycle = pkg.billingCycle;
+
+
+
+    // PACKAGE PRICE
+    const basePackagePrice =
+      billingCycle === "Annual" ? Number(pkg.priceYearly) : Number(pkg.priceMonthly);
+
+    const packagePriceConverted = basePackagePrice * exchangeRate;
+
+    const packageDiscountAmount =
+      pkg.discount ? (packagePriceConverted * pkg.discount) / 100 : 0;
+
+    const finalPackagePrice = packagePriceConverted - packageDiscountAmount;
+
+    // ADDONS PRICE
+    const addOns = customerPackage.addOns?.map(addOn => {
+      const basePrice =
+        billingCycle === "Annual"
+          ? Number(addOn.yearlyPrice || 0)
+          : Number(addOn.monthlyPrice || 0);
+
+      const convertedPrice = basePrice * exchangeRate;
+
+      const discountAmount =
+        addOn.discount ? (convertedPrice * addOn.discount) / 100 : 0;
+
+      return {
+        moduleName: addOn.module,
+        featureName: addOn.feature,
+        price: convertedPrice,
+        discount: discountAmount,
+        finalPrice: convertedPrice - discountAmount
+      };
+    }) || [];
+
+    // CALCULATIONS
+
+    const addOnsTotal = addOns.reduce((s, a) => s + a.finalPrice, 0);
+    const subTotal = finalPackagePrice + addOnsTotal;
+
+    const vatPercentage = Number(1);
+    const vatAmount = (subTotal * vatPercentage) / 100;
+
+    const total = subTotal + vatAmount;
+
+    return res.status(200).json({
+      success: true,
+      invoiceNumber: invoice.invoiceNumber,
+
+      customer: {
+        name: `${customer.firstName} ${customer.lastName}`,
+        email: customer.email,
+        countryCode: customer.countryCode,
+        phoneNumber: customer.phoneNumber
+      },
+
+      package: {
+        name: pkg.name,
+        seats: pkg.seats,
+        billingCycle,
+        price: packagePriceConverted,
+        discount: packageDiscountAmount,
+        finalPrice: finalPackagePrice
+      },
+
+      addOns,
+
+      summary: {
+        subTotal,
+        vatPercentage,
+        vatAmount,
+        total
+      },
+
+      currency: {
+        code: currency.currencyCode,
+        symbol: currency.currencySymbol
+      }
+    });
+
+  } catch (error) {
+    console.error("getInvoiceForPayment error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+
+// SEND INVOICE VIA EMAIL
+export const sendInvoice = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { invoiceId, customerId } = req.params;
+
+    const invoice = await invoiceRepo.findOne({
+      where: { id: Number(invoiceId) ,customerId: Number(customerId), isDelete: false },
+      order: { createdAt: "DESC" }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found"
+      });
+    }
+
+    // Get related data
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId), isDelete: false }
+    });
+
+    if (!customer || !customer.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer email not found"
+      });
+    }
+
+    const order = await orderRepo.findOne({
+      where: { id: invoice.orderId, isDelete: false }
+    });
+
+    const currency = await currencyRepo.findOne({
+      where: { id: invoice.currencyId, isDelete: false }
+    });
+
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: invoice.customerId, isDelete: false }
+    });
+
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage?.packageId, isDelete: false }
+    })
+
+    // Prepare business details from customer
+    const business = {
+      businessName: customer.businessName,
+      buildingNumber: customer.businessAddress.buildingNumber,
+      buildingName: customer.businessAddress.buildingName,
+      street: customer.businessAddress.street,
+      city: customer.businessAddress.city,
+      county: customer.businessAddress.county,
+      country: customer.businessAddress.country
+    }
+    // Generate PDF
+    const pdfBytes = await generateInvoicePDF({
+      invoice,
+      customer,
+      order,
+      currency,
+      package: pkg,
+      addOns: customerPackage?.addOns || [],
+      business
+    });
+
+    // Send email with PDF attachment
+    const emailSent = await sendCustomerInvoiceEmail(
+      {
+        name: customer.firstName + ' ' + customer.lastName || customer.businessName,
+        email: customer.email
+      },
+      {
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.amount,
+        outstandingBalance: invoice.outstandingBalance,
+        paymentStatus: invoice.paymentStatus,
+        createdAt: invoice.createdAt,
+        dueDate: invoice.dueDate
+      },
+      pdfBytes,
+      {
+        currencySymbol: currency?.currencySymbol || '£',
+        currencyCode: currency?.currencyCode || 'GBP'
+      }
+    );
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send invoice email"
+      });
+    }
+
+    // Update invoice status to sent
+    invoice.status = "sent";
+    await invoiceRepo.save(invoice);
+
+    return res.status(200).json({
+      success: true,
+      data: invoice,
+      message: `Invoice sent successfully to ${customer.email}`
+    });
+  } catch (error) {
+    console.error("Error sending invoice:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send invoice: " + (error as Error).message
+    });
+  }
+};
+
+// DOWNLOAD INVOICE PDF
+export const downloadInvoicePDF = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { invoiceId, customerId } = req.params;
+
+    const invoice = await invoiceRepo.findOne({
+      where: { id: Number(invoiceId), customerId: Number(customerId), isDelete: false },
+      order: { createdAt: "DESC" }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found"
+      });
+    }
+
+    // Get related data
+    const customer = await customerRepo.findOne({
+      where: { id: Number(customerId), isDelete: false }
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found"
+      });
+    }
+
+    const order = await orderRepo.findOne({
+      where: { id: invoice.orderId, isDelete: false }
+    });
+
+    const currency = await currencyRepo.findOne({
+      where: { id: invoice.currencyId, isDelete: false }
+    });
+
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId: invoice.customerId, isDelete: false }
+    });
+
+    const pkg = await packageRepo.findOne({
+      where: { id: customerPackage?.packageId, isDelete: false }
+    });
+
+    // Prepare business details from customer
+   const business = {
+      businessName: customer.businessName,
+      buildingNumber: customer.businessAddress.buildingNumber,
+      buildingName: customer.businessAddress.buildingName,
+      street: customer.businessAddress.street,
+      city: customer.businessAddress.city,
+      county: customer.businessAddress.county,
+      country: customer.businessAddress.country
+    }
+    const customerInfo =  {
+        name: customer.firstName + ' ' + customer.lastName || customer.businessName,
+        email: customer.email,
+        phone: customer.countryCode + customer.phoneNumber
+      }
+
+    // Generate PDF
+    const pdfBytes = await generateInvoicePDF({
+      invoice,
+      customer: customerInfo,
+      order,
+      currency,
+      package: pkg,
+      addOns: customerPackage?.addOns || [],
+      business
+    });
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition', 
+      `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`
+    );
+    res.setHeader('Content-Length', pdfBytes.length);
+
+    // Send PDF buffer
+    return res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error("Error downloading invoice:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate invoice PDF: " + (error as Error).message
+    });
+  }
+};
+
+// Cancel Invoice
+export const cancelInvoice = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const { invoiceId } = req.params;
+    const { reason } = req.body;
+
+    const invoice = await invoiceRepo.findOne({
+      where: { id: Number(invoiceId), isDelete: false }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found"
+      });
+    }
+
+    if (invoice.paymentStatus === "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot cancel paid invoice. Please process a refund instead."
+      });
+    }
+
+    invoice.status = "cancelled";
+    invoice.paymentStatus = "cancelled";
+    invoice.outstandingBalance = 0;
+    await invoiceRepo.save(invoice);
+
+    // Update related order
+    const order = await orderRepo.findOne({
+      where: { id: invoice.orderId, isDelete: false }
+    });
+
+    if (order) {
+      order.status = "cancelled";
+      if (reason) {
+        order.note = (order.note || '') + `\n[Cancelled: ${reason}]`;
+      }
+      await orderRepo.save(order);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { invoice, order },
+      message: "Invoice cancelled successfully"
+    });
+  } catch (error) {
+    console.error("Error cancelling invoice:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to cancel invoice: " + (error as Error).message
+    });
+  }
+};
 /**
  * @swagger
  * /api/invoices:
