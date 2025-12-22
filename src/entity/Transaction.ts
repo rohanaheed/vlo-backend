@@ -1,36 +1,39 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
 export class Transaction {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column('decimal', { precision: 12, scale: 2 })
+  @Column("decimal", { precision: 12, scale: 2 })
   amount!: number;
 
   @Column()
   currencyId!: number;
 
   @Column()
-  status!: string; // e.g., 'pending', 'completed', 'failed'
+  status!: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: "timestamp" })
   transactionDate!: Date;
 
   @Column()
-  paymentMethodId!: number; // e.g., 'card', 'bank_transfer', 'paypal'
-
-  @Column({ nullable: true })
-  reference?: string;
-
-  @Column({ nullable: true })
-  description?: string;
+  paymentMethodId!: number;
 
   @Column({ default: 0 })
   customerId!: number;
 
   @Column({ default: 0 })
   invoiceId!: number;
+
+  @Column({ default: 0 })
+  orderId!: number;
+
+  @Column({ nullable: true })
+  reference?: string;
+
+  @Column({ nullable: true })
+  description?: string;
 
   @Column({ default: false })
   isDeleted!: boolean;
