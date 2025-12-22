@@ -6,8 +6,6 @@ import { Package } from "../entity/Package";
 
 const metricRepo = AppDataSource.getRepository(PreSignupMatric);
 const subscriptionRepo = AppDataSource.getRepository(Subscription);
-const packageRepo = AppDataSource.getRepository(Package);
-
 
 /**
  * @swagger
@@ -68,45 +66,68 @@ const packageRepo = AppDataSource.getRepository(Package);
  */
 export const getPreSignupMetrics = async (req: Request, res: Response): Promise<any> => {
   try {
-
-    // View type: "this_month" | "last_month" | "week" etc.
+    // View Selection
     const view = (req.query.view as string) || "this_month";
+    const metricRepo = AppDataSource.getRepository(PreSignupMatric);
 
-    // Helper to compute date ranges
-    const now = new Date();
-    const getRange = (view: string): { start: Date; end: Date; prevStart: Date; prevEnd: Date } => {
-      const start = new Date();
-      const end = new Date();
-      let prevStart, prevEnd;
+    const getRange = (view: string) => {
+      const now = new Date();
+      const start = new Date(); // Start of current period
+      const end = new Date();   // End of current period
+      const prevStart = new Date(); // Start of comparison period
+      const prevEnd = new Date();   // End of comparison period
 
       switch (view) {
-        case "this_month":
+        case "last_month":
+          // Current: Full Previous Month (e.g., Nov 1 - Nov 30)
           start.setDate(1);
+          start.setMonth(now.getMonth() - 1);
           start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
+
+          end.setDate(0); // Last day of last month
           end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+
+          // Previous: Full Month Before That (e.g., Oct 1 - Oct 31)
+          prevStart.setDate(1);
+          prevStart.setMonth(now.getMonth() - 2);
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setDate(0); // Last day of 2 months ago
+          prevEnd.setMonth(now.getMonth() - 1); // Fix month pointer
+          prevEnd.setHours(23, 59, 59, 999);
           break;
+
         case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
+          // Current: Start of this week (Sunday) to NOW
+          const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
+          start.setDate(now.getDate() - dayOfWeek);
           start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          prevStart = new Date(start);
+          
+          end.setTime(now.getTime()); // Up to this exact moment
+
+          // Previous: Start of last week to Same Time last week
           prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setDate(end.getDate() - 7);
+          prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
           break;
+
+        case "this_month":
         default:
+          // Current: 1st of month to NOW (e.g., Dec 1 - Dec 19)
           start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+          start.setHours(0, 0, 0, 0);
+          
+          end.setTime(now.getTime()); // Up to this exact moment
+
+          // Previous: 1st of last month to Same Date last month (e.g., Nov 1 - Nov 19)
+          prevStart.setMonth(now.getMonth() - 1, 1);
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setMonth(now.getMonth() - 1, now.getDate());
+          prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+          break;
       }
 
       return { start, end, prevStart, prevEnd };
@@ -114,57 +135,75 @@ export const getPreSignupMetrics = async (req: Request, res: Response): Promise<
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // Fetch current and previous period metrics in parallel for optimization
+    const targetMetrics = [
+      "anonymous_visitors",
+      "lead_magnet_engagers",
+      "pricing_page_bouncers"
+    ];
+
     const [currentMetrics, previousMetrics] = await Promise.all([
       metricRepo
         .createQueryBuilder("m")
         .select("m.metricType", "metricType")
         .addSelect("SUM(m.value)", "value")
         .where("m.date BETWEEN :start AND :end", { start, end })
+        .andWhere("m.category = :cat", { cat: "pre_signup" }) 
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
         .groupBy("m.metricType")
         .getRawMany(),
+        
       metricRepo
         .createQueryBuilder("m")
         .select("m.metricType", "metricType")
         .addSelect("SUM(m.value)", "value")
         .where("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .andWhere("m.category = :cat", { cat: "pre_signup" })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
         .groupBy("m.metricType")
         .getRawMany()
     ]);
 
-    // Map helper
-    const getValue = (arr: any[], type: string): number => {
-      return Number(arr.find((m) => m.metricType === type)?.value || 0);
+    const getValue = (arr: any[], type: string) => {
+      const row = arr.find(m => m.metricType === type);
+      return row ? Number(row.value) : 0;
     };
 
-    const anonymousVisitors = getValue(currentMetrics, "anonymous_visitors");
-    const leadMagnetEngagers = getValue(currentMetrics, "lead_magnet_engagers");
-    const pricingPageBouncers = getValue(currentMetrics, "pricing_page_bouncers");
+    const currentStats = {
+      anon: getValue(currentMetrics, "anonymous_visitors"),
+      magnet: getValue(currentMetrics, "lead_magnet_engagers"),
+      bounce: getValue(currentMetrics, "pricing_page_bouncers"),
+    };
 
-    const totalCurrent = anonymousVisitors + leadMagnetEngagers + pricingPageBouncers;
-    const totalPrevious = previousMetrics.reduce((sum, m) => sum + Number(m.value || 0), 0);
-    const growthPercentage = totalPrevious
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : 0;
+    const prevStats = {
+      anon: getValue(previousMetrics, "anonymous_visitors"),
+      magnet: getValue(previousMetrics, "lead_magnet_engagers"),
+      bounce: getValue(previousMetrics, "pricing_page_bouncers"),
+    };
+
+    const totalCurrent = currentStats.anon + currentStats.magnet + currentStats.bounce;
+    const totalPrevious = prevStats.anon + prevStats.magnet + prevStats.bounce;
+
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
 
     return res.status(200).json({
-      growthPercentage: Number(growthPercentage.toFixed(2)),
+      growthPercentage: Number(growthPercentage.toFixed(0)), 
       stats: [
-        { label: "Anonymous Visitors", value: anonymousVisitors },
-        { label: "Lead Magnet Engagers", value: leadMagnetEngagers },
-        { label: "Pricing Page Bouncers", value: pricingPageBouncers },
+        { label: "Anonymous Visitors", value: currentStats.anon },
+        { label: "Lead Magnet Engagers", value: currentStats.magnet },
+        { label: "Pricing Page Bouncers", value: currentStats.bounce },
       ],
     });
+
   } catch (error) {
     console.error("Error in getPreSignupMetrics:", error);
-    return res.status(500).json({
-      message: "Error fetching pre-signup metrics",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-
   /**
    * @swagger
    * /api/pre-signup-metrics/signup-abandonment:
@@ -222,118 +261,132 @@ export const getPreSignupMetrics = async (req: Request, res: Response): Promise<
    *                 error:
    *                   type: string
    */
+
 export const getSignupAbandonmentMetrics = async (req: Request, res: Response): Promise<any> => {
   try {
-    const view = (req.query.view as string) || "this_month"; // this_month | week | last_month
+    const view = (req.query.view as string) || "this_month";
+    const metricRepo = AppDataSource.getRepository(PreSignupMatric);
 
-    // 🧭 Helper for date ranges
-    const now = new Date();
-    const getRange = (view: string): { start: Date; end: Date; prevStart: Date; prevEnd: Date } => {
+    const targetMetrics = [
+      "form_abandoners",
+      "oauth_dropoffs",
+      "verification_ghosts"
+    ];
+
+    const getRange = (view: string) => {
+      const now = new Date();
       const start = new Date();
       const end = new Date();
-      let prevStart, prevEnd;
+      const prevStart = new Date();
+      const prevEnd = new Date();
 
-      switch (view) {
-        case "this_month":
-          start.setDate(1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
+      if (view === "last_month") {
+        // Current: Full Previous Month
+        start.setDate(1);
+        start.setMonth(now.getMonth() - 1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(0); 
+        end.setHours(23, 59, 59, 999);
 
-        case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
-          start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
-          break;
+        // Previous: Full Month Before That
+        prevStart.setDate(1);
+        prevStart.setMonth(now.getMonth() - 2);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(0);
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setHours(23, 59, 59, 999);
 
-        default:
-          start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+      } else if (view === "week") {
+        // Current: Start of Week (Sun)
+        const day = now.getDay();
+        start.setDate(now.getDate() - day);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Week
+        prevStart.setDate(start.getDate() - 7);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(end.getDate() - 7);
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+      } else {
+        // Default: "this_month"
+        // Current: Start of Month
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Month 
+        prevStart.setMonth(now.getMonth() - 1);
+        prevStart.setDate(1);
+        prevStart.setHours(0, 0, 0, 0);
+        
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setDate(now.getDate());
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
       }
-
       return { start, end, prevStart, prevEnd };
     };
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // 🧮 Fetch current and previous period metrics in parallel
-    const [
-      currentMetrics,
-      previousMetrics
-    ] = await Promise.all([
+    const [currentMetrics, previousMetrics] = await Promise.all([
       metricRepo
         .createQueryBuilder("m")
         .select("m.metricType", "metricType")
         .addSelect("SUM(m.value)", "value")
         .where("m.category = :category", { category: "signup_abandonment" })
         .andWhere("m.date BETWEEN :start AND :end", { start, end })
-        .andWhere("m.metricType IN (:...types)", {
-          types: ["form_abandoners", "oauth_dropoffs", "verification_ghosts"],
-        })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
         .groupBy("m.metricType")
         .getRawMany(),
+      
       metricRepo
         .createQueryBuilder("m")
         .select("m.metricType", "metricType")
         .addSelect("SUM(m.value)", "value")
         .where("m.category = :category", { category: "signup_abandonment" })
         .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
-        .andWhere("m.metricType IN (:...types)", {
-          types: ["form_abandoners", "oauth_dropoffs", "verification_ghosts"],
-        })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
         .groupBy("m.metricType")
         .getRawMany()
     ]);
 
-    // Helper to extract values
     const getValue = (arr: any[], type: string): number =>
       Number(arr.find((m) => m.metricType === type)?.value || 0);
 
-    // Current metric values
     const formAbandoners = getValue(currentMetrics, "form_abandoners");
     const oauthDropoffs = getValue(currentMetrics, "oauth_dropoffs");
     const verificationGhosts = getValue(currentMetrics, "verification_ghosts");
 
-    // Totals and growth
     const totalCurrent = formAbandoners + oauthDropoffs + verificationGhosts;
-    const totalPrevious = previousMetrics.reduce((sum, m) => sum + Number(m.value || 0), 0);
-    const growthPercentage = totalPrevious
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : 0;
+    
+    const prevForm = getValue(previousMetrics, "form_abandoners");
+    const prevOauth = getValue(previousMetrics, "oauth_dropoffs");
+    const prevVerify = getValue(previousMetrics, "verification_ghosts");
+    const totalPrevious = prevForm + prevOauth + prevVerify;
 
-    // ✅ Response
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
+
     return res.status(200).json({
-      growthPercentage: Number(growthPercentage.toFixed(2)),
+      growthPercentage: Math.round(growthPercentage), // Returns an integer (e.g. 12)
       stats: [
         { label: "Form Abandoners", value: formAbandoners },
         { label: "OAuth Drop-offs", value: oauthDropoffs },
         { label: "Verification Ghosts", value: verificationGhosts },
       ],
     });
+
   } catch (error) {
     console.error("Error in getSignupAbandonmentMetrics:", error);
-    return res.status(500).json({
-      message: "Error fetching signup abandonment metrics",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-
 /**
  * @swagger
  * /api/pre-signup-metrics/activation:
@@ -391,115 +444,132 @@ export const getSignupAbandonmentMetrics = async (req: Request, res: Response): 
  *                 error:
  *                   type: string
  */
+
 export const getActivationMetrics = async (req: Request, res: Response): Promise<any> => {
   try {
-    const view = (req.query.view as string) || "this_month"; // "this_month" | "week" | etc.
+    const view = (req.query.view as string) || "this_month";
+    const metricRepo = AppDataSource.getRepository(PreSignupMatric);
 
-    // 🧭 Helper for date ranges
-    const now = new Date();
-    const getRange = (view: string): { start: Date; end: Date; prevStart: Date; prevEnd: Date } => {
+    const targetMetrics = [
+      "feature_explorers",
+      "integration_stuck",
+      "team_invite_ghosts"
+    ];
+
+    const getRange = (view: string) => {
+      const now = new Date();
       const start = new Date();
       const end = new Date();
-      let prevStart, prevEnd;
+      const prevStart = new Date();
+      const prevEnd = new Date();
 
-      switch (view) {
-        case "this_month":
-          start.setDate(1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
+      if (view === "last_month") {
+        // Current: Full Previous Month
+        start.setDate(1);
+        start.setMonth(now.getMonth() - 1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(0); 
+        end.setHours(23, 59, 59, 999);
 
-        case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
-          start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
-          break;
+        // Previous: Full Month Before That
+        prevStart.setDate(1);
+        prevStart.setMonth(now.getMonth() - 2);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(0);
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setHours(23, 59, 59, 999);
 
-        default:
-          start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+      } else if (view === "week") {
+        // Current: Start of Week (Sun) 
+        const day = now.getDay();
+        start.setDate(now.getDate() - day);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Week
+        prevStart.setDate(start.getDate() - 7);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(end.getDate() - 7);
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+      } else {
+        // Default: "this_month"
+        // Current: Start of Month
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Month 
+        prevStart.setMonth(now.getMonth() - 1);
+        prevStart.setDate(1);
+        prevStart.setHours(0, 0, 0, 0);
+        
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setDate(now.getDate());
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
       }
-
       return { start, end, prevStart, prevEnd };
     };
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // 🧮 Current period metrics
-    const currentMetrics = await metricRepo
-      .createQueryBuilder("m")
-      .select("m.metricType", "metricType")
-      .addSelect("SUM(m.value)", "value")
-      .where("m.category = :category", { category: "activation" })
-      .andWhere("m.date BETWEEN :start AND :end", { start, end })
-      .andWhere("m.metricType IN (:...types)", {
-        types: ["feature_explorers", "integration_stuck", "team_invite_ghosts"],
-      })
-      .groupBy("m.metricType")
-      .getRawMany();
+    const [currentMetrics, previousMetrics] = await Promise.all([
+      metricRepo
+        .createQueryBuilder("m")
+        .select("m.metricType", "metricType")
+        .addSelect("SUM(m.value)", "value")
+        .where("m.category = :category", { category: "activation" }) // Filter by Activation
+        .andWhere("m.date BETWEEN :start AND :end", { start, end })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
+        .groupBy("m.metricType")
+        .getRawMany(),
+      
+      metricRepo
+        .createQueryBuilder("m")
+        .select("m.metricType", "metricType")
+        .addSelect("SUM(m.value)", "value")
+        .where("m.category = :category", { category: "activation" })
+        .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
+        .groupBy("m.metricType")
+        .getRawMany()
+    ]);
 
-    // 🕓 Previous period metrics (for growth)
-    const previousMetrics = await metricRepo
-      .createQueryBuilder("m")
-      .select("m.metricType", "metricType")
-      .addSelect("SUM(m.value)", "value")
-      .where("m.category = :category", { category: "activation" })
-      .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
-      .andWhere("m.metricType IN (:...types)", {
-        types: ["feature_explorers", "integration_stuck", "team_invite_ghosts"],
-      })
-      .groupBy("m.metricType")
-      .getRawMany();
-
-    // Helper
     const getValue = (arr: any[], type: string): number =>
       Number(arr.find((m) => m.metricType === type)?.value || 0);
 
-    // Extract individual values
     const featureExplorers = getValue(currentMetrics, "feature_explorers");
     const integrationStuck = getValue(currentMetrics, "integration_stuck");
     const teamInviteGhosts = getValue(currentMetrics, "team_invite_ghosts");
 
-    // Totals and growth
     const totalCurrent = featureExplorers + integrationStuck + teamInviteGhosts;
-    const totalPrevious = previousMetrics.reduce((sum, m) => sum + Number(m.value || 0), 0);
-    const growthPercentage = totalPrevious
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : 0;
+  
+    const totalPrevious = 
+      getValue(previousMetrics, "feature_explorers") +
+      getValue(previousMetrics, "integration_stuck") +
+      getValue(previousMetrics, "team_invite_ghosts");
 
-    // ✅ Response
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
+
     return res.status(200).json({
-      growthPercentage: Number(growthPercentage.toFixed(2)),
+      growthPercentage: Math.round(growthPercentage),
       stats: [
         { label: "Feature Explorers", value: featureExplorers },
         { label: "Integration Stuck", value: integrationStuck },
         { label: "Team Invite Ghosts", value: teamInviteGhosts },
       ],
     });
+
   } catch (error) {
     console.error("Error in getActivationMetrics:", error);
-    return res.status(500).json({
-      message: "Error fetching activation metrics",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-
 /**
  * @swagger
  * /api/pre-signup-metrics/retention-payment:
@@ -559,113 +629,128 @@ export const getActivationMetrics = async (req: Request, res: Response): Promise
  */
 export const getRetentionPaymentMetrics = async (req: Request, res: Response): Promise<any> => {
   try {
-    const view = (req.query.view as string) || "this_month"; // this_month | week | etc.
+    const view = (req.query.view as string) || "this_month";
+    const metricRepo = AppDataSource.getRepository(PreSignupMatric);
 
-    // 🧭 Helper for date ranges
-    const now = new Date();
-    const getRange = (view: string): { start: Date; end: Date; prevStart: Date; prevEnd: Date } => {
+    const targetMetrics = [
+      "discount_hunters",
+      "silent_churn_risks",
+      "renewal_draggers"
+    ];
+
+    const getRange = (view: string) => {
+      const now = new Date();
       const start = new Date();
       const end = new Date();
-      let prevStart, prevEnd;
+      const prevStart = new Date();
+      const prevEnd = new Date();
 
-      switch (view) {
-        case "this_month":
-          start.setDate(1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
+      if (view === "last_month") {
+        // Current: Full Previous Month
+        start.setDate(1);
+        start.setMonth(now.getMonth() - 1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(0); 
+        end.setHours(23, 59, 59, 999);
 
-        case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
-          start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
-          break;
+        // Previous: Full Month Before That
+        prevStart.setDate(1);
+        prevStart.setMonth(now.getMonth() - 2);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(0);
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setHours(23, 59, 59, 999);
 
-        default:
-          start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+      } else if (view === "week") {
+        // Current: Start of Week (Sun)
+        const day = now.getDay();
+        start.setDate(now.getDate() - day);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Week
+        prevStart.setDate(start.getDate() - 7);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(end.getDate() - 7);
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+      } else {
+        // Default: "this_month"
+        // Current: Start of Month
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
+
+        // Previous: Start of Last Month
+        prevStart.setMonth(now.getMonth() - 1);
+        prevStart.setDate(1);
+        prevStart.setHours(0, 0, 0, 0);
+        
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setDate(now.getDate());
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
       }
-
       return { start, end, prevStart, prevEnd };
     };
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // 🧮 Current Period Metrics
-    const currentMetrics = await metricRepo
-      .createQueryBuilder("m")
-      .select("m.metricType", "metricType")
-      .addSelect("SUM(m.value)", "value")
-      .where("m.category = :category", { category: "retention_payment" })
-      .andWhere("m.date BETWEEN :start AND :end", { start, end })
-      .andWhere("m.metricType IN (:...types)", {
-        types: ["discount_hunters", "silent_churn_risks", "renewal_draggers"],
-      })
-      .groupBy("m.metricType")
-      .getRawMany();
+    const [currentMetrics, previousMetrics] = await Promise.all([
+      metricRepo
+        .createQueryBuilder("m")
+        .select("m.metricType", "metricType")
+        .addSelect("SUM(m.value)", "value")
+        .where("m.category = :category", { category: "retention_payment" })
+        .andWhere("m.date BETWEEN :start AND :end", { start, end })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
+        .groupBy("m.metricType")
+        .getRawMany(),
+      
+      metricRepo
+        .createQueryBuilder("m")
+        .select("m.metricType", "metricType")
+        .addSelect("SUM(m.value)", "value")
+        .where("m.category = :category", { category: "retention_payment" })
+        .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .andWhere("m.metricType IN (:...types)", { types: targetMetrics })
+        .groupBy("m.metricType")
+        .getRawMany()
+    ]);
 
-    // 🕓 Previous Period Metrics
-    const previousMetrics = await metricRepo
-      .createQueryBuilder("m")
-      .select("m.metricType", "metricType")
-      .addSelect("SUM(m.value)", "value")
-      .where("m.category = :category", { category: "retention_payment" })
-      .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
-      .andWhere("m.metricType IN (:...types)", {
-        types: ["discount_hunters", "silent_churn_risks", "renewal_draggers"],
-      })
-      .groupBy("m.metricType")
-      .getRawMany();
-
-    // Helper
     const getValue = (arr: any[], type: string): number =>
       Number(arr.find((m) => m.metricType === type)?.value || 0);
 
-    // Extract individual values
     const discountHunters = getValue(currentMetrics, "discount_hunters");
     const silentChurnRisks = getValue(currentMetrics, "silent_churn_risks");
     const renewalDraggers = getValue(currentMetrics, "renewal_draggers");
-
-    // Totals and growth
+ 
     const totalCurrent = discountHunters + silentChurnRisks + renewalDraggers;
-    const totalPrevious = previousMetrics.reduce((sum, m) => sum + Number(m.value || 0), 0);
-    const growthPercentage = totalPrevious
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : 0;
+    const totalPrevious = 
+      getValue(previousMetrics, "discount_hunters") +
+      getValue(previousMetrics, "silent_churn_risks") +
+      getValue(previousMetrics, "renewal_draggers");
 
-    // ✅ Response
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
+
     return res.status(200).json({
-      growthPercentage: Number(growthPercentage.toFixed(2)),
+      growthPercentage: Math.round(growthPercentage),
       stats: [
         { label: "Discount Hunters", value: discountHunters },
         { label: "Silent Churn Risks", value: silentChurnRisks },
         { label: "Renewal Draggers", value: renewalDraggers },
       ],
     });
+
   } catch (error) {
     console.error("Error in getRetentionPaymentMetrics:", error);
-    return res.status(500).json({
-      message: "Error fetching retention & payment metrics",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-
 /**
  * @swagger
  * /api/pre-signup-metrics/plan-distribution:
@@ -726,161 +811,125 @@ export const getRetentionPaymentMetrics = async (req: Request, res: Response): P
  *                 error:
  *                   type: string
  */
+
 export const getPlanDistribution = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log("getPlanDistribution");
+    const view = (req.query.view as string) || "this_month";
+    const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
-    const view = (req.query.view as string) || "this_month"; // "this_month" | "last_month" | "week" | "24hours"
-
-    // 🧭 Helper — dynamic date ranges
     const now = new Date();
     const getRange = (view: string) => {
       const start = new Date();
       const end = new Date();
-      let prevStart, prevEnd;
+      const prevStart = new Date();
+      const prevEnd = new Date();
 
-      switch (view.toLowerCase()) {
-        case "this_month":
-          start.setDate(1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
+      if (view === "last_month") {
+        start.setDate(1);
+        start.setMonth(now.getMonth() - 1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(0); 
+        end.setHours(23, 59, 59, 999);
 
-        case "last_month":
-          start.setMonth(now.getMonth() - 1, 1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth(), 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
+        prevStart.setDate(1);
+        prevStart.setMonth(now.getMonth() - 2);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(0);
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setHours(23, 59, 59, 999);
+      } else if (view === "week") {
+        const day = now.getDay();
+        start.setDate(now.getDate() - day);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
 
-        case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
-          start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
-          break;
+        prevStart.setDate(start.getDate() - 7);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setDate(end.getDate() - 7);
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+      } else {
+        // this_month
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setTime(now.getTime());
 
-        case "24hours":
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setDate(end.getDate() - 1);
-          break;
-
-        default:
-          // Default to monthly
-          start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+        prevStart.setMonth(now.getMonth() - 1);
+        prevStart.setDate(1);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd.setMonth(now.getMonth() - 1);
+        prevEnd.setDate(now.getDate());
+        prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
       }
-
       return { start, end, prevStart, prevEnd };
     };
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // 🧮 Current Period — group by plan
     const currentData = await subscriptionRepo
       .createQueryBuilder("subscription")
-      .leftJoin(Package, "package", "package.id = subscription.packageId")
+      .leftJoin(Package, "package", "package.id = subscription.customerPackageId") 
       .select("package.name", "planName")
-      .addSelect("COUNT(DISTINCT subscription.customerId)", "count")
-      .where("subscription.isDelete = false")
-      .andWhere("package.isDelete = false")
-      .andWhere("package.isActive = true")
-      .andWhere("subscription.createdAt BETWEEN :start AND :end", { start, end })
+      .addSelect("COUNT(subscription.id)", "count")
+      .where("subscription.createdAt BETWEEN :start AND :end", { start, end })
       .groupBy("package.name")
       .getRawMany();
 
-    // 🕓 Previous Period
     const previousData = await subscriptionRepo
       .createQueryBuilder("subscription")
-      .leftJoin(Package, "package", "package.id = subscription.packageId")
+      .leftJoin(Package, "package", "package.id = subscription.customerPackageId")
       .select("package.name", "planName")
-      .addSelect("COUNT(DISTINCT subscription.customerId)", "count")
-      .where("subscription.isDelete = false")
-      .andWhere("package.isDelete = false")
-      .andWhere("package.isActive = true")
-      .andWhere("subscription.createdAt BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+      .addSelect("COUNT(subscription.id)", "count")
+      .where("subscription.createdAt BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
       .groupBy("package.name")
       .getRawMany();
 
-    // 🔢 Helper — get count by plan name
-    const getValue = (arr: any[], name: string) =>
-      Number(arr.find((r) => r.planName === name)?.count || 0);
+    // 4. Calculate Stats
+    const targetPlans = ["Basic", "Standard", "Medium", "Large"];
 
-    // Plan order — can dynamically fetch later if needed
-    const planNames = ["Basic", "Standard", "Medium", "Large"];
+    const getCount = (data: any[], planName: string) => {
+      const row = data.find(d => d.planName === planName);
+      return row ? Number(row.count) : 0;
+    };
 
-    const totalCurrent = currentData.reduce((sum, r) => sum + Number(r.count), 0);
-    const totalPrevious = previousData.reduce((sum, r) => sum + Number(r.count), 0);
+    let totalCurrent = 0;
+    let totalPrevious = 0;
 
-    // Avoid divide-by-zero
-    const safeDivide = (a: number, b: number): number => (b === 0 ? 0 : a / b);
+    targetPlans.forEach(plan => {
+      totalCurrent += getCount(currentData, plan);
+      totalPrevious += getCount(previousData, plan);
+    });
 
-    // 🧮 Compute per-plan distribution and growth
-    const plans = planNames.map((plan) => {
-      const currentCount = getValue(currentData, plan);
-      const previousCount = getValue(previousData, plan);
-
-      const currentPercent = totalCurrent ? (currentCount / totalCurrent) * 100 : 0;
-      const previousPercent = totalPrevious ? (previousCount / totalPrevious) * 100 : 0;
-
-      const growth = previousPercent
-        ? ((currentPercent - previousPercent) / previousPercent) * 100
+    const plans = targetPlans.map(plan => {
+      const currentCount = getCount(currentData, plan);
+      const percentage = totalCurrent > 0 
+        ? (currentCount / totalCurrent) * 100 
         : 0;
 
       return {
         label: plan,
-        value: Number(currentPercent.toFixed(2)),
-        growth: Number(growth.toFixed(2)),
+        value: Math.round(percentage),
+        count: currentCount
       };
     });
 
-    // 📈 Overall Growth
-    const overallGrowth = totalPrevious
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : 0;
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
 
-    // ✅ Response
     return res.status(200).json({
-      view,
-      totalCustomers: totalCurrent,
-      growthPercentage: Number(overallGrowth.toFixed(2)),
-      plans,
+      totalNewSubscriptions: totalCurrent,
+      growthPercentage: Math.round(growthPercentage),
+      plans
     });
+
   } catch (error) {
     console.error("Error in getPlanDistribution:", error);
-    return res.status(500).json({
-      message: "Error fetching plan distribution",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-
-
-
-
 /**
  * @swagger
  * /api/pre-signup-metrics/churn-prediction:
