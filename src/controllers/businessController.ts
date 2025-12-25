@@ -1144,28 +1144,34 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
   const search = (req.query.search as string) || "";
 
   const qb = subcategoryRepo.createQueryBuilder("sc")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = sc.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "sc.id as id",
+      "sc.title as title",
+      "sc.BusinessPracticeAreaId as BusinessPracticeAreaId",
+      "sc.isDelete as isDelete",
+      "sc.createdAt as createdAt",
+      "sc.updatedAt as updatedAt",
+      "practiceArea.title as practiceAreaName",
+      "practiceArea.code as practiceAreaCode"
+    ])
     .where("sc.isDelete = :isDelete", { isDelete: false });
 
   if (search.trim()) {
-    qb.andWhere(
-      "(MATCH(sc.title) AGAINST (:search IN NATURAL LANGUAGE MODE) OR sc.title LIKE :likeSearch)",
-      {
-        search,
-        likeSearch: `%${search}%`,
-      }
-    )
-      .addSelect("MATCH(sc.title) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
-      .orderBy("relevance", "DESC");
-  } else {
-    qb.orderBy("sc.id", order);
+    qb.andWhere("sc.title LIKE :likeSearch", { likeSearch: `%${search}%` });
   }
 
-  qb.skip(skip).take(limit);
+  qb.orderBy("sc.id", order)
+    .skip(skip)
+    .take(limit);
 
-  const [subcategories, total] = await qb.getManyAndCount();
+  const data = await qb.getRawMany();
+  const total = await subcategoryRepo.createQueryBuilder("sc")
+    .where("sc.isDelete = :isDelete", { isDelete: false })
+    .getCount();
 
   return res.json({
-    data: subcategories,
+    data,
     total,
     page,
     limit
@@ -1200,13 +1206,26 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
 export const getSubcategoryById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const subcategory = await subcategoryRepo.findOne({ where: { id: Number(id), isDelete: false } });
+  const result = await subcategoryRepo.createQueryBuilder("sc")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = sc.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "sc.id as id",
+      "sc.title as title",
+      "sc.BusinessPracticeAreaId as BusinessPracticeAreaId",
+      "sc.isDelete as isDelete",
+      "sc.createdAt as createdAt",
+      "sc.updatedAt as updatedAt",
+      "practiceArea.title as practiceAreaName",
+      "practiceArea.code as practiceAreaCode"
+    ])
+    .where("sc.id = :id AND sc.isDelete = :isDelete", { id: Number(id), isDelete: false })
+    .getRawOne();
 
-  if (!subcategory) {
+  if (!result) {
     return res.status(404).json({ message: "Subcategory not found" });
   }
 
-  return res.json(subcategory);
+  return res.json(result);
 };
 
 /**
@@ -1454,21 +1473,39 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
   let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
-  const qb = customFieldRepo.createQueryBuilder("customField")
-    .where("customField.isDelete = :isDelete", { isDelete: false });
+  const qb = customFieldRepo.createQueryBuilder("cf")
+    .leftJoin(CustomfieldGroup, "fieldGroup", "fieldGroup.id = cf.CustomfieldGroupId AND fieldGroup.isDelete = false")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = cf.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "cf.id as id",
+      "cf.title as title",
+      "cf.type as type",
+      "cf.templateKeyword as templateKeyword",
+      "cf.BusinessPracticeAreaId as BusinessPracticeAreaId",
+      "cf.CustomfieldGroupId as CustomfieldGroupId",
+      "cf.isDelete as isDelete",
+      "cf.createdAt as createdAt",
+      "cf.updatedAt as updatedAt",
+      "fieldGroup.title as customFieldGroupName",
+      "practiceArea.title as practiceAreaName"
+    ])
+    .where("cf.isDelete = :isDelete", { isDelete: false });
 
   if (search) {
     qb.andWhere(
-      "(customField.title LIKE :search OR customField.templateKeyword LIKE :search)",
+      "(cf.title LIKE :search OR cf.templateKeyword LIKE :search)",
       { search: `%${search}%` }
     );
   }
 
-  qb.orderBy("customField.createdAt", order)
+  qb.orderBy("cf.createdAt", order)
     .skip((page - 1) * limit)
     .take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const data = await qb.getRawMany();
+  const total = await customFieldRepo.createQueryBuilder("cf")
+    .where("cf.isDelete = :isDelete", { isDelete: false })
+    .getCount();
 
   return res.json({ data, total, page, limit });
 };
@@ -1500,11 +1537,31 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
  */
 export const getCustomFieldById = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const customField = await customFieldRepo.findOne({ where: { id: Number(id), isDelete: false } });
-  if (!customField) {
+
+  const result = await customFieldRepo.createQueryBuilder("cf")
+    .leftJoin(CustomfieldGroup, "fieldGroup", "fieldGroup.id = cf.CustomfieldGroupId AND fieldGroup.isDelete = false")
+    .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = cf.BusinessPracticeAreaId AND practiceArea.isDelete = false")
+    .select([
+      "cf.id as id",
+      "cf.title as title",
+      "cf.type as type",
+      "cf.templateKeyword as templateKeyword",
+      "cf.BusinessPracticeAreaId as BusinessPracticeAreaId",
+      "cf.CustomfieldGroupId as CustomfieldGroupId",
+      "cf.isDelete as isDelete",
+      "cf.createdAt as createdAt",
+      "cf.updatedAt as updatedAt",
+      "fieldGroup.title as customFieldGroupName",
+      "practiceArea.title as practiceAreaName"
+    ])
+    .where("cf.id = :id AND cf.isDelete = :isDelete", { id: Number(id), isDelete: false })
+    .getRawOne();
+
+  if (!result) {
     return res.status(404).json({ message: "Custom field not found" });
   }
-  return res.json(customField);
+
+  return res.json(result);
 };
 
 /**
