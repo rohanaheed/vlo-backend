@@ -34,7 +34,7 @@ const maskCard = (cardNumber: string) => {
   }
 };
 
-// ================= CREATE PAYMENT METHOD =================
+// CREATE PAYMENT METHOD
 export const createPayment = async (req: Request, res: Response): Promise<any> => {
   try {
     const {
@@ -117,7 +117,7 @@ export const createPayment = async (req: Request, res: Response): Promise<any> =
   }
 };
 
-// ================= GET ALL PAYMENT METHODS FOR CUSTOMER =================
+// GET ALL PAYMENT METHODS FOR CUSTOMER
 export const getCustomerPayments = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId } = req.params;
@@ -144,7 +144,7 @@ export const getCustomerPayments = async (req: Request, res: Response): Promise<
   }
 };
 
-// ================= GET PAYMENT METHOD BY ID =================
+// GET PAYMENT METHOD BY ID
 export const getPaymentById = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -180,7 +180,7 @@ export const getPaymentById = async (req: Request, res: Response): Promise<any> 
   }
 };
 
-// ================= UPDATE PAYMENT METHOD =================
+// UPDATE PAYMENT METHOD
 export const updatePayment = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -257,7 +257,7 @@ export const updatePayment = async (req: Request, res: Response): Promise<any> =
   }
 };
 
-// ================= DELETE PAYMENT METHOD =================
+// DELETE PAYMENT METHOD
 export const deletePayment = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -289,7 +289,7 @@ export const deletePayment = async (req: Request, res: Response): Promise<any> =
   }
 };
 
-// ================= SET DEFAULT PAYMENT METHOD =================
+// SET DEFAULT PAYMENT METHOD
 export const setDefaultPayment = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -326,7 +326,7 @@ export const setDefaultPayment = async (req: Request, res: Response): Promise<an
   }
 };
 
-// ================= GET DEFAULT PAYMENT METHOD =================
+// GET DEFAULT PAYMENT METHOD
 export const getDefaultPayment = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId } = req.params;

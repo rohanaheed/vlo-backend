@@ -1803,7 +1803,7 @@ export const getActiveCustomersPerYear = async (req: Request, res: Response): Pr
         label: year.toString(),
         total: yearTotal,
         data: monthDataWithGrowth,
-        yearOverYearGrowth: 0 // Will be calculated next
+        yearOverYearGrowth: 0
       };
     }
 
@@ -2082,12 +2082,15 @@ export const getTotalCustomersPerYear = async (
     let periodEndDate: Date;
 
     const currentMonth = now.getMonth();
-    
-    // Calculate current week number (1-52)
-    const startOfYear = new Date(currentYear, 0, 1);
-    const daysSinceStartOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-    const currentWeek = Math.ceil((daysSinceStartOfYear + startOfYear.getDay() + 1) / 7);
-    
+
+    // Calculate current week number
+    const currentWeekResult = await customerRepo
+      .createQueryBuilder("customer")
+      .select("WEEK(:now)", "week")
+      .setParameter("now", now)
+      .getRawOne();
+    const currentWeek = currentWeekResult?.week ? Number(currentWeekResult.week) : 1;
+
     const currentQuarter = Math.floor(currentMonth / 3) + 1;
 
     switch (view) {
@@ -2399,12 +2402,15 @@ export const getRevenueTrend = async (
     let periodEndDate!: Date;
 
     const currentMonth = now.getMonth();
-    
-    // Calculate current week number (1-52)
-    const startOfYear = new Date(currentYear, 0, 1);
-    const daysSinceStartOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-    const currentWeek = Math.ceil((daysSinceStartOfYear + startOfYear.getDay() + 1) / 7);
-    
+
+    // Calculate current week
+    const currentWeekResult = await transactionRepo
+      .createQueryBuilder("t")
+      .select("WEEK(:now)", "week")
+      .setParameter("now", now)
+      .getRawOne();
+    const currentWeek = currentWeekResult?.week ? Number(currentWeekResult.week) : 1;
+
     const currentQuarter = Math.floor(currentMonth / 3) + 1;
 
     switch (view) {

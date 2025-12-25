@@ -8,6 +8,7 @@ import { Subscription } from "../entity/Subscription";
 import { CustomerPackage } from "../entity/CustomerPackage";
 import { Package } from "../entity/Package";
 import { Customer } from "../entity/Customer";
+import { Currency } from "../entity/Currency";
 
 const transactionRepo = AppDataSource.getRepository(Transaction);
 const orderRepo = AppDataSource.getRepository(Order);
@@ -16,8 +17,43 @@ const subscriptionRepo = AppDataSource.getRepository(Subscription);
 const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
 const packageRepo = AppDataSource.getRepository(Package);
 const customerRepo = AppDataSource.getRepository(Customer);
+const currencyRepo = AppDataSource.getRepository(Currency);
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+// Helper function to convert customer currency amount to base currency
+const convertToBaseCurrency = async (amount: number, currencyId: number): Promise<{ amountInGBP: number, baseCurrencyId: number }> => {
+  // Get the customer currency
+  const customerCurrency = await currencyRepo.findOne({ where: { id: currencyId } });
+
+  if (!customerCurrency) {
+    throw new Error(`Currency with ID ${currencyId} not found`);
+  }
+
+  // Get base currency
+  const baseCurrency = await currencyRepo.findOne({
+    where: { currencyCode: 'GBP', isDelete:false }
+  });
+
+  if (!baseCurrency) {
+    throw new Error('Base currency (GBP) not found in database');
+  }
+
+  if (customerCurrency.currencyCode === 'GBP') {
+    return {
+      amountInGBP: amount,
+      baseCurrencyId: baseCurrency.id
+    };
+  }
+
+  // Convert using exchange rate
+  const amountInGBP = amount / Number(customerCurrency.exchangeRate);
+
+  return {
+    amountInGBP: Math.round(amountInGBP * 100) / 100,
+    baseCurrencyId: baseCurrency.id
+  };
+};
 
 export const handleStripeWebhook = async (req: Request, res: Response) => {
   const sig = req.headers["stripe-signature"] as string;
@@ -118,12 +154,18 @@ const handlePaymentSuccess = async (intent: any) => {
 
     // Create Transaction
     try {
+      // Convert amount to base currency (GBP)
+      const customerAmount = intent.amount / 100; // Amount in customer currency
+      const { amountInGBP, baseCurrencyId } = await convertToBaseCurrency(customerAmount, currencyId);
+
+      console.log(`Converting ${customerAmount} (currency ID: ${currencyId}) to ${amountInGBP} GBP (currency ID: ${baseCurrencyId})`);
+
       await runner.manager.save(Transaction, {
         customerId,
         orderId,
         invoiceId,
-        amount: intent.amount / 100,
-        currencyId,
+        amount: amountInGBP,
+        currencyId: baseCurrencyId,
         paymentMethodId,
         reference: intent.id,
         status: "completed",
@@ -131,7 +173,7 @@ const handlePaymentSuccess = async (intent: any) => {
         transactionDate: new Date(),
         isDeleted: false
       });
-      console.log(`Transaction created for invoice ${invoiceId}, reference: ${intent.id}`);
+      console.log(`Transaction created for invoice ${invoiceId}, reference: ${intent.id}, amount: £${amountInGBP}`);
     } catch (err: any) {
       // Handle any database constraint violations
       if (err.code === 'ER_DUP_ENTRY' || err.code === '23505') {
@@ -291,12 +333,18 @@ const handlePaymentFailure = async (intent: any) => {
   try {
     // Create failed transaction record
     try {
+      // Convert amount to base currency (GBP)
+      const customerAmount = (intent.amount || 0) / 100; // Amount in customer's currency
+      const { amountInGBP, baseCurrencyId } = await convertToBaseCurrency(customerAmount, currencyId);
+
+      console.log(`Converting failed payment ${customerAmount} (currency ID: ${currencyId}) to ${amountInGBP} GBP (currency ID: ${baseCurrencyId})`);
+
       await transactionRepo.save({
         customerId,
         orderId,
         invoiceId,
-        amount: (intent.amount || 0) / 100,
-        currencyId,
+        amount: amountInGBP,
+        currencyId: baseCurrencyId, // Store as GBP currency ID
         paymentMethodId,
         reference: intent.id,
         status: "failed",
@@ -304,7 +352,7 @@ const handlePaymentFailure = async (intent: any) => {
         transactionDate: new Date(),
         isDeleted: false
       });
-      console.log(`Failed transaction recorded for invoice ${invoiceId}`);
+      console.log(`Failed transaction recorded for invoice ${invoiceId}, amount: £${amountInGBP}`);
     } catch (err: any) {
       // Handle duplicate key error
       if (err.code === 'ER_DUP_ENTRY' || err.code === '23505') {

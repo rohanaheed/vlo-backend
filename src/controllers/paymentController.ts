@@ -32,7 +32,7 @@ const decrypt = (encryptedText: string) => {
   return decrypted;
 };
 
-// ─────────── COUNTRY NAME TO ISO CODE CONVERTER ───────────
+// COUNTRY NAME TO ISO CODE CONVERTER
 function convertCountryToISO(countryName: string): string {
   const countryMap: Record<string, string> = {
     'united states': 'US',
@@ -113,12 +113,12 @@ function convertCountryToISO(countryName: string): string {
   return 'US';
 }
 
-// ─────────── PAYMENT NOW ───────────
+
 export const paymentNow = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId, orderId, invoiceId, paymentMethodId, autoRenew = true } = req.body;
 
-    console.log('📥 Payment request received:', { customerId, orderId, invoiceId });
+    console.log('Payment request received:', { customerId, orderId, invoiceId });
 
     // Validation
     if (!customerId || !orderId || !invoiceId) {
@@ -209,7 +209,7 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    // Update order status to 'processing' before payment
+    // Update order status
     await orderRepo.update({ id: orderId }, { status: "processing" });
     console.log('Order status updated to processing');
 
@@ -251,7 +251,6 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-// ─────────── PROCESS STRIPE PAYMENT ───────────
 async function processStripePayment(
   paymentMethod: PaymentMethod,
   invoice: any,
