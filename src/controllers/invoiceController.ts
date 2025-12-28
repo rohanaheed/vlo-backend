@@ -19,8 +19,6 @@ const invoiceRepo = AppDataSource.getRepository(Invoice);
 const customerRepo = AppDataSource.getRepository(Customer);
 const currencyRepo = AppDataSource.getRepository(Currency);
 const orderRepo = AppDataSource.getRepository(Order);
-const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
-const packageRepo = AppDataSource.getRepository(Package);
 const financialRepo = AppDataSource.getRepository(FinancialStatement);
 const userRepo = AppDataSource.getRepository(User);
 
@@ -887,8 +885,7 @@ export const getAllInvoices = async (req: Request, res: Response): Promise<any> 
       take: limit,
       order: {
         createdAt: "DESC"
-      },
-      relations: ['customer', 'currency', 'order']
+      }
     });
 
     // // Convert all invoices from base currency to customer currency
@@ -955,8 +952,7 @@ export const getInvoiceById = async (req: Request, res: Response): Promise<any> 
     const { id } = req.params;
 
     const invoice = await invoiceRepo.findOne({
-      where: { id: parseInt(id), isDelete: false },
-      relations: ['customer', 'currency', 'order']
+      where: { id: parseInt(id), isDelete: false }
     });
 
     if (!invoice) {
@@ -971,7 +967,8 @@ export const getInvoiceById = async (req: Request, res: Response): Promise<any> 
 
     return res.json({
       success: true,
-      data: invoice
+      data: invoice,
+      message: "Invoice Fetched"
     });
 
   } catch (error) {
@@ -1147,7 +1144,12 @@ export const updateInvoice = async (req: Request, res: Response): Promise<any> =
     // Update invoice
     Object.assign(existingInvoice, value);
     existingInvoice.updatedAt = new Date();
-
+    if(value.includeFinancialStatement){
+      const financialStatement = await financialRepo.findOne({ where: { customerId:customer.id, isDelete: false } })
+      if(financialStatement){
+        existingInvoice.financialStatementId = financialStatement.id;
+      }
+    }
     // Calculations in base currency
     calculateInvoiceTotals(existingInvoice);
 
@@ -1438,7 +1440,6 @@ export const getInvoicesByCustomer = async (req: Request, res: Response): Promis
       order: {
         createdAt: "DESC"
       },
-      relations: ['currency', 'order']
     });
 
     // Convert Invoice to Customer Currency
