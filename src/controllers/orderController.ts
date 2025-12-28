@@ -11,7 +11,20 @@ const customerRepo = AppDataSource.getRepository(Customer);
 const packageRepo = AppDataSource.getRepository(Package);
 const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
 const currencyRepo = AppDataSource.getRepository(Currency);
-const invoiceRepo = AppDataSource.getRepository(Invoice)
+const invoiceRepo = AppDataSource.getRepository(Invoice);
+
+// Convert Order to Customer Currency
+const convertOrderToCustomerCurrency = async (order: any, customerCurrencyId: number): Promise<any> => {
+  const currency = await currencyRepo.findOne({ where: { id: customerCurrencyId, isDelete: false } });
+  const exchangeRate = Number(currency?.exchangeRate || 1);
+
+  return {
+    ...order,
+    subTotal: Number((order.subTotal * exchangeRate).toFixed(2)),
+    discount: Number((order.discount * exchangeRate).toFixed(2)),
+    total: Number((order.total * exchangeRate).toFixed(2))
+  };
+};
 
 
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
@@ -22,11 +35,11 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    // Prevent duplicate pending orders and draft invoices
+    // Check Pending Order Already Exists
     const existingOrder = await orderRepo.findOne({
       where: { customerId: Number(customerId), status: "pending", isDelete: false },
     });
-    
+    // Check Draft Invoice Already Exist
     const existingInvoice = await invoiceRepo.findOne({
       where: { customerId: Number(customerId), status: "draft", isDelete: false },
     });
@@ -46,12 +59,6 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     const customer = await customerRepo.findOne({ where: { id: Number(customerId), isDelete: false } });
     if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
 
-    // Fetch Currency
-    const currency = await currencyRepo.findOne({ where: { id: customer.currencyId, isDelete: false } });
-    if (!currency) return res.status(404).json({ success: false, message: "Currency not found" });
-
-    const exchangeRate = currency.exchangeRate ?? 1;
-
     // Fetch Customer Package
     const customerPackage = await customerPackageRepo.findOne({ where: { customerId: Number(customerId), isDelete: false } });
     if (!customerPackage) return res.status(404).json({ success: false, message: "Customer Package not found" });
@@ -62,19 +69,17 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
     const addOns = customerPackage.addOns ?? [];
 
-    // Calculate package price and discount
-    const basePackagePrice = pkg.billingCycle === "Annual" ? Number(pkg.priceYearly ?? 0) : Number(pkg.priceMonthly ?? 0);
-    const packagePrice = basePackagePrice * exchangeRate;
+    // Calculate package price and discount in Base Currency
+    const packagePrice = pkg.billingCycle === "Annual" ? Number(pkg.priceYearly ?? 0) : Number(pkg.priceMonthly ?? 0);
     const packageDiscountPercent = pkg.discount ?? 0;
     const packageDiscountAmount = (packagePrice * packageDiscountPercent) / 100;
     const packageFinalPrice = packagePrice - packageDiscountAmount;
 
-    // Calculate add-ons
+    // Calculate add-ons in Base currency
     let addOnsSubTotal = 0;
     let addOnsFinalTotal = 0;
     for (const addOn of addOns) {
-      const basePrice = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
-      const price = basePrice * exchangeRate;
+      const price = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
       addOnsSubTotal += price;
       const discount = addOn.discount ?? 0;
       addOnsFinalTotal += price - (price * discount) / 100;
@@ -84,8 +89,40 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     const total = packageFinalPrice + addOnsFinalTotal;
     const totalDiscount = subTotal - total;
 
+    const invoiceItems = [];
+
+    // Add package details
+    invoiceItems.push({
+      description: `${pkg.name} - ${pkg.billingCycle}`,
+      quantity: 1,
+      amount: Number(packagePrice.toFixed(2)),
+      subTotal: Number(packageFinalPrice.toFixed(2)),
+      discount: Number(packageDiscountAmount.toFixed(2)),
+      discountType: `${packageDiscountPercent}%`,
+      vatRate: "",
+      vatType: ""
+    });
+
+    for (const addOn of addOns) {
+      const price = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
+      const discount = addOn.discount ?? 0;
+      const discountAmount = (price * discount) / 100;
+      const finalPrice = price - discountAmount;
+
+      invoiceItems.push({
+        description: `Add-on: ${addOn.feature}`,
+        quantity: 1,
+        amount: Number(price.toFixed(2)),
+        subTotal: Number(finalPrice.toFixed(2)),
+        discount: Number(discountAmount.toFixed(2)),
+        discountType: `${discount}%`,
+        vatRate: "",
+        vatType: ""
+      });
+    }
+
     // Generate order number
-    const orderNumber = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const orderNumber = `${Math.floor(Math.random() * 90000) + 10000}`;
 
     // Create Order
     const newOrder = orderRepo.create({
@@ -105,8 +142,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     });
     await orderRepo.save(newOrder);
 
-    // Create Invoice (link to order via orderId)
-    const invoiceNumber = `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Create Invoice
+    const invoiceNumber = `INV-${Math.floor(Math.random() * 90000) + 10000}`;
     const dueDate = new Date();
 
     if (pkg.billingCycle === "Annual") {
@@ -115,22 +152,37 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
       dueDate.setMonth(dueDate.getMonth() + 1);
     }
 
+    // Prepare client address string
+    const addressParts = [
+      customer.businessAddress?.buildingNumber || '',
+      customer.businessAddress?.buildingName || '',
+      customer.businessAddress?.street || '',
+      customer.businessAddress?.city || '',
+      customer.businessAddress?.county || '',
+      customer.businessAddress?.country || ''
+    ].filter(part => part.trim() !== '');
+    const clientAddress = addressParts.join(', ');
+
     const newInvoice = invoiceRepo.create({
       invoiceNumber,
+      total: Number(total.toFixed(2)),
       amount: Number(total.toFixed(2)),
       status: "draft",
-      paymentStatus: "unpaid",
+      paymentStatus: "pending",
       plan: pkg.billingCycle,
       customerId: Number(customerId),
+      customerName: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+      customerEmail: customer.email,
+      clientAddress: clientAddress,
       userId,
       currencyId: customer.currencyId,
       orderId: newOrder.id,
       subTotal: Number(subTotal.toFixed(2)),
       outstandingBalance: Number(total.toFixed(2)),
-      discount: Number(totalDiscount.toFixed(2)),
-      discountType: `${packageDiscountPercent}%`,
       dueDate: dueDate,
+      IssueDate: new Date(),
       vat: 0,
+      items: invoiceItems,
     });
     await invoiceRepo.save(newInvoice);
 
@@ -160,6 +212,10 @@ export const getOrderById = async (req: Request, res: Response): Promise<any> =>
                 message: "Order not found"
             });
         }
+
+        // // Convert from base currency to customer currency
+        // const convertedOrder = await convertOrderToCustomerCurrency(order, order.currencyId);
+
         return res.status(200).json({
             success: true,
             data: order,
@@ -189,9 +245,15 @@ export const getOrdersByCustomerId = async (req: Request, res: Response): Promis
                 message: "Orders not found"
             });
         }
+
+        // Convert all Orders to Customer Currency
+        const convertedOrders = await Promise.all(
+            orders.map(order => convertOrderToCustomerCurrency(order, order.currencyId))
+        );
+
         return res.status(200).json({
             success: true,
-            data: orders,
+            data: convertedOrders,
             message: "Orders fetched successfully",
         });
 
@@ -216,6 +278,12 @@ export const getAllOrders = async (req: Request, res: Response): Promise<any> =>
                 message: "Orders not found"
             });
         }
+
+        // // Convert all orders from base currency to customer currency
+        // const convertedOrders = await Promise.all(
+        //     orders.map(order => convertOrderToCustomerCurrency(order, order.currencyId))
+        // );
+
         return res.status(200).json({
             success: true,
             data: orders,
