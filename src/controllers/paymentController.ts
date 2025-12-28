@@ -23,6 +23,35 @@ const subscriptionRepo = AppDataSource.getRepository(Subscription);
 const algorithm = 'aes-256-cbc';
 const secretKey = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || '32-char-secret-key!!').digest();
 
+// Convert Invoice to Customer Currency
+const convertInvoiceToCustomerCurrency = (invoice: any, exchangeRate: number): any => {
+  return {
+    ...invoice,
+    subTotal: Number((invoice.subTotal * exchangeRate).toFixed(2)),
+    vat: Number((invoice.vat * exchangeRate).toFixed(2)),
+    discountValue: Number((invoice.discountValue * exchangeRate).toFixed(2)),
+    total: Number((invoice.total * exchangeRate).toFixed(2)),
+    outstandingBalance: Number((invoice.outstandingBalance * exchangeRate).toFixed(2)),
+    amount: Number((invoice.amount * exchangeRate).toFixed(2)),
+    items: invoice.items?.map((item: any) => ({
+      ...item,
+      amount: Number(((item.amount || 0) * exchangeRate).toFixed(2)),
+      subTotal: Number(((item.subTotal || 0) * exchangeRate).toFixed(2)),
+      discount: Number(((item.discount || 0) * exchangeRate).toFixed(2))
+    })) || []
+  };
+};
+
+// Convert Order to Customer Currency
+const convertOrderToCustomerCurrency = (order: any, exchangeRate: number): any => {
+  return {
+    ...order,
+    subTotal: Number((order.subTotal * exchangeRate).toFixed(2)),
+    discount: Number((order.discount * exchangeRate).toFixed(2)),
+    total: Number((order.total * exchangeRate).toFixed(2))
+  };
+};
+
 const decrypt = (encryptedText: string) => {
   const [ivHex, encrypted] = encryptedText.split(':');
   const iv = Buffer.from(ivHex, 'hex');
@@ -32,7 +61,7 @@ const decrypt = (encryptedText: string) => {
   return decrypted;
 };
 
-// COUNTRY NAME TO ISO CODE CONVERTER
+// Country Names to ISO code
 function convertCountryToISO(countryName: string): string {
   const countryMap: Record<string, string> = {
     'united states': 'US',
@@ -92,25 +121,21 @@ function convertCountryToISO(countryName: string): string {
 
   const normalized = countryName.toLowerCase().trim();
   
-  // If already 2 letters and uppercase, return as is
   if (/^[A-Z]{2}$/.test(countryName)) {
     return countryName;
   }
-  
-  // If already 2 letters lowercase, return uppercase
+
   if (/^[a-z]{2}$/.test(countryName)) {
     return countryName.toUpperCase();
   }
-  
-  // Look up in map
+
   const isoCode = countryMap[normalized];
   if (isoCode) {
     return isoCode;
   }
   
-  // Default to US if not found
-  console.warn(`Country "${countryName}" not found in map, defaulting to US`);
-  return 'US';
+  console.warn(`Country "${countryName}" not found in map, defaulting to UK`);
+  return 'GB';
 }
 
 
@@ -159,7 +184,7 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Get invoice
-    const invoice = await invoiceRepo.findOne({ where: { id: invoiceId, paymentStatus:"unpaid", isDelete: false } });
+    const invoice = await invoiceRepo.findOne({ where: { id: invoiceId, paymentStatus:"pending", isDelete: false } });
     if (!invoice) {
       return res.status(404).json({ success: false, message: "Invoice not found or Invoice already paid" });
     }
@@ -171,21 +196,21 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Get customer
-    const customer = await customerRepo.findOne({ 
-      where: { id: customerId, isDelete: false } 
+    const customer = await customerRepo.findOne({
+      where: { id: customerId, isDelete: false }
     });
     if (!customer) {
       return res.status(404).json({ success: false, message: "Customer not found" });
     }
 
     // Get customer package
-    const customerPackage = await customerPackageRepo.findOne({ 
-      where: { customerId, isDelete: false } 
+    const customerPackage = await customerPackageRepo.findOne({
+      where: { customerId, isDelete: false }
     });
     if (!customerPackage) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Customer package not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Customer package not found"
       });
     }
 
@@ -201,11 +226,16 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
       return res.status(404).json({ success: false, message: "Currency not found" });
     }
 
+    // Convert invoice and order
+    const exchangeRate = Number(currency.exchangeRate || 1);
+    const convertedInvoice = convertInvoiceToCustomerCurrency(invoice, exchangeRate);
+    const convertedOrder = convertOrderToCustomerCurrency(order, exchangeRate);
+
     // Validate amount
-    if (invoice.amount <= 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid invoice amount" 
+    if (convertedInvoice.amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid invoice amount"
       });
     }
 
@@ -217,15 +247,15 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
     if (paymentMethod.paymentMethod.toLowerCase() === "stripe") {
       const result = await processStripePayment(
         paymentMethod,
-        invoice,
-        order,
+        convertedInvoice,
+        convertedOrder,
         customer,
         customerPackage,
         currency,
         pkg,
         autoRenew
       );
-      
+
       console.log('Payment intent created:', result.paymentIntentId);
       return res.status(200).json(result);
     } 
@@ -271,7 +301,6 @@ async function processStripePayment(
 
     console.log('Card details decrypted');
 
-    // Parse expiry date (supports MM/YY or MMYY format)
     const expiryMatch = cardExpiryDate.match(/(\d{2})\/?(\d{2})/);
     if (!expiryMatch) {
       throw new Error("Invalid card expiry date format. Expected MM/YY or MMYY");
@@ -291,18 +320,18 @@ async function processStripePayment(
     // Create Stripe payment method
     let stripePaymentMethod;
     
-    // Check if we're in test mode
+    // Check Test mode
     const isTestMode = process.env.STRIPE_SECRET_KEY?.includes('test');
     
     if (isTestMode) {
       console.log('Test mode detected - Using Stripe test payment methods');
       
       const testTokens: Record<string, string> = {
-        '4242424242424242': 'pm_card_visa',           // Successful payment
-        '5555555555554444': 'pm_card_mastercard',     // Successful payment
-        '378282246310005': 'pm_card_amex',            // Successful payment
-        '4000000000000002': 'pm_card_chargeDeclined', // Declined payment
-        '4000000000009995': 'pm_card_visa_debit',     // Debit card
+        '4242424242424242': 'pm_card_visa',  
+        '5555555555554444': 'pm_card_mastercard',
+        '378282246310005': 'pm_card_amex', 
+        '4000000000000002': 'pm_card_chargeDeclined', 
+        '4000000000009995': 'pm_card_visa_debit',
       };
 
       const testToken = testTokens[cardNumber];
@@ -367,7 +396,7 @@ async function processStripePayment(
       
       if (customers.data.length > 0) {
         stripeCustomer = customers.data[0];
-        console.log('👤 Found existing Stripe customer:', stripeCustomer.id);
+        console.log('Found existing Stripe customer:', stripeCustomer.id);
       } else {
         // Create new customer
         stripeCustomer = await stripe.customers.create({
@@ -489,8 +518,6 @@ async function processStripePayment(
 
   } catch (error: any) {
     console.error('Stripe payment error:', error);
-    
-    // Return user-friendly error messages
     return {
       success: false,
       message: error.message || "Payment processing failed",
