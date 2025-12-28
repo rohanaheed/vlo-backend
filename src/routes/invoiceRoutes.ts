@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { 
-  createInvoice, 
-  getAllInvoices, 
-  getInvoiceById, 
-  updateInvoice, 
-  deleteInvoice, 
+import {
+  createInvoice,
+  getAllInvoices,
+  getInvoiceById,
+  updateInvoice,
+  deleteInvoice,
   getInvoiceStats,
   getInvoicesByCustomer,
   markInvoiceAsBad,
@@ -12,7 +12,10 @@ import {
   sendInvoice,
   downloadInvoicePDF,
   cancelInvoice,
-  getInvoiceForPayment
+  getInvoiceForPayment,
+  sendReminderEmail,
+  scheduleInvoice,
+  deleteInvoiceItem
 } from "../controllers/invoiceController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -48,7 +51,10 @@ router.put("/:id/mark-bad", authorize(["super_admin"]), asyncHandler(markInvoice
 router.delete("/:id", authorize(["super_admin"]), asyncHandler(deleteInvoice));
 
 // Fetch invoice details for payment
-router.get("/details/:orderId", authorize(["super_admin", "user"]), asyncHandler(getInvoiceForPayment));
+router.get("/details/:invoiceId", authorize(["super_admin", "user"]), asyncHandler(getInvoiceForPayment));
+
+// Delete Invoice Item
+router.delete("/:id/items/:itemId", authorize(["super_admin"]), asyncHandler(deleteInvoiceItem));
 
 // Send Invoice
 router.post("/:invoiceId/send-invoice/:customerId", authorize(["super_admin"]), asyncHandler(sendInvoice));
@@ -58,5 +64,11 @@ router.post("/:invoiceId/download-pdf/:customerId", authorize(["super_admin"]), 
 
 // Cancel Invoice
 router.post("/cancel/:invoiceId", authorize(["super_admin"]), asyncHandler(cancelInvoice));
+
+// Send Reminder Email
+router.post("/:invoiceId/send-reminder/:customerId", authorize(["super_admin"]), asyncHandler(sendReminderEmail));
+
+// Schedule Invoice
+router.put("/:id/schedule", authorize(["super_admin"]), asyncHandler(scheduleInvoice));
 
 export default router; 

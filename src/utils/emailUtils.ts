@@ -365,6 +365,104 @@ export const sendCustomerLoginCredentials = async (
     return false;
   }
 };
+// Send invoice reminder email
+export const sendInvoiceReminderEmail = async (
+  customer: {
+    name: string;
+    email: string;
+  },
+  invoice: {
+    invoiceNumber: string;
+    outstandingBalance: number;
+    dueDate: Date;
+  },
+  currency?: {
+    currencySymbol: string;
+    currencyCode: string;
+    exchangeRate: number;
+  }
+): Promise<boolean> => {
+  try {
+    const symbol = currency?.currencySymbol || '£';
+    const code = currency?.currencyCode || 'GBP';
+    const exchangeRate = currency?.exchangeRate || 1;
+    const outstandingBalance = (invoice.outstandingBalance * exchangeRate).toFixed(2)
+    const daysOverdue = Math.floor((new Date().getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 3600 * 24));
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || "noreply@yourcompany.com",
+      to: customer.email,
+      subject: `Payment Reminder: Invoice ${invoice.invoiceNumber} ${daysOverdue > 0 ? 'Overdue' : 'Due Soon'}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+
+          <div style="background-color: ${daysOverdue > 0 ? '#dc3545' : '#ffc107'}; padding: 20px; color: #fff;">
+            <h2 style="margin: 0;">Payment Reminder</h2>
+          </div>
+
+          <div style="padding: 20px; background-color: #ffffff;">
+            <p>Dear ${customer.name},</p>
+
+            <p>
+              This is a friendly reminder regarding invoice <strong>${invoice.invoiceNumber}</strong>
+              ${daysOverdue > 0 ? `which is now <strong>${daysOverdue} days overdue</strong>` : 'which is due soon'}.
+            </p>
+
+            <p><strong>Invoice Details:</strong></p>
+
+            <ul>
+              <li><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</li>
+              <li><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString()}</li>
+              <li><strong>Amount Due:</strong> ${symbol}${outstandingBalance} ${code}</li>
+            </ul>
+
+            ${daysOverdue > 0
+              ? `
+                <div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
+                  <p style="margin: 0; color: #856404;">
+                    <strong>Action Required:</strong> This invoice is overdue. Please make payment as soon as possible to avoid any late fees or service interruption.
+                  </p>
+                </div>
+              `
+              : `
+                <p>Please ensure payment is made by the due date to avoid any late fees.</p>
+              `
+            }
+
+            <p>
+              If you have already made this payment, please disregard this reminder.
+              If you have any questions or need to discuss payment arrangements,
+              please contact our accounts team.
+            </p>
+
+            <p>
+              Thank you for your prompt attention to this matter.
+            </p>
+
+            <p>
+              Best regards,<br />
+              Accounts Team
+            </p>
+          </div>
+
+          <div style="background-color: #f3f4f6; padding: 15px; text-align: center;">
+            <p style="font-size: 12px; color: #666; margin: 0;">
+              This is an automated reminder. Please do not reply.
+            </p>
+          </div>
+
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error("Error sending invoice reminder email:", error);
+    return false;
+  }
+};
+
 export const sendCustomerInvoiceEmail = async (
   customer: {
     name: string;
@@ -372,9 +470,8 @@ export const sendCustomerInvoiceEmail = async (
   },
   invoice: {
     invoiceNumber: string;
-    amount: number;
     outstandingBalance: number;
-    paymentStatus: "paid" | "unpaid" | "pending" | "cancelled" | "failed";
+    paymentStatus: "paid" | "pending" | "cancelled" | "failed" | "refunded";
     createdAt: Date;
     dueDate: Date;
   },
@@ -382,11 +479,32 @@ export const sendCustomerInvoiceEmail = async (
   currency?: {
     currencySymbol: string;
     currencyCode: string;
+    exchangeRate: number;
   },
+  financialStatementPdfBytes?: Uint8Array
 ): Promise<boolean> => {
   try {
-    const symbol = currency?.currencySymbol || "$";
-    const code = currency?.currencyCode || "USD";
+    const symbol = currency?.currencySymbol;
+    const code = currency?.currencyCode;
+    const exchangeRate = currency?.exchangeRate || 1;
+    const outstandingBalance = (invoice.outstandingBalance * exchangeRate).toFixed(2)
+
+    const attachments = [
+      {
+        filename: `invoice-${invoice.invoiceNumber}.pdf`,
+        content: Buffer.from(pdfBytes),
+        contentType: "application/pdf",
+      },
+    ];
+
+    // Add financial statement PDF if provided
+    if (financialStatementPdfBytes) {
+      attachments.push({
+        filename: `financial-statement-${invoice.invoiceNumber}.pdf`,
+        content: Buffer.from(financialStatementPdfBytes),
+        contentType: "application/pdf",
+      });
+    }
 
     const mailOptions = {
       from: process.env.SMTP_FROM || "noreply@yourcompany.com",
@@ -396,7 +514,7 @@ export const sendCustomerInvoiceEmail = async (
       }`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          
+
           <div style="background-color: #4f46e5; padding: 20px; color: #fff;">
             <h2 style="margin: 0;">Invoice ${invoice.invoiceNumber}</h2>
           </div>
@@ -405,8 +523,7 @@ export const sendCustomerInvoiceEmail = async (
             <p>Dear ${customer.name},</p>
 
             <p>
-              Please find attached your invoice for 
-              <strong>${symbol}${invoice.amount.toFixed(2)} ${code}</strong>.
+              Please find attached your invoice${financialStatementPdfBytes ? ' and financial statement' : ''}.
             </p>
 
             <p><strong>Invoice Details:</strong></p>
@@ -415,7 +532,6 @@ export const sendCustomerInvoiceEmail = async (
               <li><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</li>
               <li><strong>Date:</strong> ${new Date(invoice.createdAt).toLocaleDateString()}</li>
               <li><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString()}</li>
-              <li><strong>Amount:</strong> ${symbol}${invoice.amount.toFixed(2)} ${code}</li>
               <li><strong>Status:</strong> ${invoice.paymentStatus}</li>
             </ul>
 
@@ -424,11 +540,11 @@ export const sendCustomerInvoiceEmail = async (
                 ? `
                   <p>
                     <strong>
-                      Amount Due: ${symbol}${invoice.outstandingBalance.toFixed(2)} ${code}
+                      Amount Due: ${symbol}${outstandingBalance} ${code}
                     </strong>
                   </p>
                   <p>
-                    Please make payment by 
+                    Please make payment by
                     ${new Date(invoice.dueDate).toLocaleDateString()}.
                   </p>
                 `
@@ -457,13 +573,7 @@ export const sendCustomerInvoiceEmail = async (
 
         </div>
       `,
-      attachments: [
-        {
-          filename: `invoice-${invoice.invoiceNumber}.pdf`,
-          content: Buffer.from(pdfBytes),
-          contentType: "application/pdf",
-        },
-      ],
+      attachments: attachments,
     };
 
     await transporter.sendMail(mailOptions);
