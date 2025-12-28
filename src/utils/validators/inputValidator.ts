@@ -260,33 +260,105 @@ export const updatePaymentSchema = Joi.object({
 });
 
 export const invoiceSchema = Joi.object({
-  invoiceNumber: Joi.string().min(3).max(50).required(),
-  amount: Joi.number().positive().precision(2).required(),
   status: Joi.string().valid(
-    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
-    'partialyPaid', 'disputed', 'reminder', 'resend', 
-    'void', 'viewed', 'unpaid'
-  ).default('draft'),
-  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded').default('pending'),
-  plan: Joi.string().min(2).max(100).required(),
-  customerId: Joi.number().integer().positive().required(),
-  currencyId: Joi.number().integer().positive().required(),
-  orderId: Joi.number().integer().positive().required()
+    'draft', 'sent', 'unsent', 'paid', 'overdue', 'cancelled',
+    'partialyPaid', 'disputed', 'reminder', 'resend',
+    'void', 'viewed', 'unpaid', 'bad'
+  ).optional().default('draft'),
+  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded', 'cancelled').optional().default('pending'),
+  plan: Joi.string().min(2).max(100).optional(),
+  items: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(500).optional(),
+      quantity: Joi.number().min(0).optional(),
+      amount: Joi.number().min(0).precision(2).optional(),
+      vatRate: Joi.string().pattern(/^\d+(\.\d+)?%$/).max(50).optional(),
+      vatType: Joi.string().max(50).optional(),
+      subTotal: Joi.number().min(0).precision(2).optional(),
+      discount: Joi.number().min(0).precision(2).optional(),
+      discountType: Joi.string().max(50).optional().allow('')
+    })
+  ).optional(),
+  customerId: Joi.number().integer().positive().optional(),
+  matterId: Joi.string().max(500).required(),
+  customerName: Joi.string().max(500).required(),
+  customerEmail: Joi.string().email().required(),
+  clientAddress: Joi.string().max(1000).required(),
+  caseDescription: Joi.string().max(500).required(),
+  orderId: Joi.number().integer().min(0).optional(),
+  dueDate: Joi.date().iso().required(),
+  IssueDate: Joi.date().iso().required(),
+  referenceNumber: Joi.string().max(100).required(),
+  priority: Joi.string().max(50).optional().allow(''),
+  isDiscount: Joi.boolean().optional(),
+  discountType: Joi.string().max(50).optional().allow(''),
+  subTotal: Joi.number().min(0).precision(2).optional(),
+  total: Joi.number().min(0).precision(2).optional(),
+  outstandingBalance: Joi.number().min(0).precision(2).optional(),
+  recurring: Joi.string().max(50).optional().allow(''),
+  recurringInterval: Joi.string().max(50).optional().allow(''),
+  recurringCount: Joi.number().integer().min(0).optional(),
+  bankAccountId: Joi.number().integer().min(0).optional(),
+  notes: Joi.string().max(5000).optional().allow(''),
+  paidDate: Joi.date().iso().optional(),
+  isPaidBy: Joi.boolean().optional(),
+  includeFinancialStatement: Joi.boolean().optional(),
+  includeRegulatoryInfo: Joi.boolean().optional(),
+  scheduledDate: Joi.date().iso().optional(),
+  isScheduled: Joi.boolean().optional()
 });
 
 export const updateInvoiceSchema = Joi.object({
-  invoiceNumber: Joi.string().min(3).max(50).optional(),
-  amount: Joi.number().positive().precision(2).optional(),
   status: Joi.string().valid(
-    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
-    'partialyPaid', 'disputed', 'reminder', 'resend', 
-    'void', 'viewed', 'unpaid'
+    'draft', 'sent', 'unsent', 'paid', 'overdue', 'cancelled',
+    'partialyPaid', 'disputed', 'reminder', 'resend',
+    'void', 'viewed', 'unpaid', 'bad'
   ).optional(),
-  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded').optional(),
-  plan: Joi.string().min(2).max(100).optional(),
+  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded', 'cancelled').optional(),
+  plan: Joi.string().min(2).max(100).optional().allow(''),
+  items: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(500).optional().allow(''),
+      quantity: Joi.number().min(0).optional(),
+      amount: Joi.number().min(0).precision(2).optional(),
+      vatRate: Joi.string().max(50).optional(),
+      vatType: Joi.number().min(0).optional(),
+      subTotal: Joi.number().min(0).precision(2).optional(),
+      discount: Joi.number().min(0).precision(2).optional(),
+      discountType: Joi.string().max(50).optional().allow('')
+    })
+  ).optional(),
   customerId: Joi.number().integer().positive().optional(),
+  matterId: Joi.string().max(500).optional().allow(''),
+  customerName: Joi.string().max(500).optional().allow(''),
+  customerEmail: Joi.string().email().optional().allow(''),
+  clientAddress: Joi.string().max(1000).optional().allow(''),
+  caseDescription: Joi.string().max(500).optional().allow(''),
   currencyId: Joi.number().integer().positive().optional(),
-  orderId: Joi.number().integer().positive().optional()
+  orderId: Joi.number().integer().min(0).optional(),
+  dueDate: Joi.date().iso().optional(),
+  IssueDate: Joi.date().iso().optional(),
+  referenceNumber: Joi.string().max(100).optional().allow(''),
+  priority: Joi.string().max(50).optional().allow(''),
+  discount: Joi.number().min(0).precision(2).optional(),
+  vat: Joi.number().min(0).precision(2).optional(),
+  discountType: Joi.string().max(50).optional().allow(''),
+  subTotal: Joi.number().min(0).precision(2).optional(),
+  total: Joi.number().min(0).precision(2).optional(),
+  outstandingBalance: Joi.number().min(0).precision(2).optional(),
+  recurring: Joi.string().max(50).optional().allow(''),
+  recurringInterval: Joi.string().max(50).optional().allow(''),
+  recurringCount: Joi.number().integer().min(0).optional(),
+  bankAccountId: Joi.number().integer().min(0).optional(),
+  notes: Joi.string().max(5000).optional().allow(''),
+  paidDate: Joi.date().iso().optional(),
+  isPaidBy: Joi.boolean().optional(),
+  financialStatementId: Joi.number().integer().min(0).optional(),
+  includeFinancialStatement: Joi.boolean().optional(),
+  includeRegulatoryInfo: Joi.boolean().optional(),
+  regulatoryInfoId: Joi.number().integer().min(0).optional(),
+  scheduledDate: Joi.date().iso().optional(),
+  isScheduled: Joi.boolean().optional()
 });
 
 export const creditNoteSchema = Joi.object({
@@ -900,4 +972,76 @@ export const customPermissionSchema = Joi.object({
 // User group assignment schema
 export const assignUserGroupSchema = Joi.object({
   userGroupId: Joi.number().integer().positive().required()
+});
+
+// Create Financial Statement Schema
+export const financialStatementSchema = Joi.object({
+  customerName: Joi.string().min(2).max(255).required(),
+  customerEmail: Joi.string().email().required(),
+  caseDescription: Joi.string().max(1000).optional().allow(''),
+  completionDate: Joi.date().iso().optional(),
+  matterId: Joi.string().max(255).optional().allow(''),
+  status: Joi.string().valid('draft', 'sent', 'unsent', 'paid', 'overdue', 'cancelled', 'partialyPaid', 'disputed', 'reminder', 'resend', 'void', 'viewed', 'unpaid', 'bad').optional().default("draft"),
+  disbursements: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(255).optional().allow(''),
+      charges: Joi.number().min(0).optional(),
+      vatAmount: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalDisbursements: Joi.number().min(0).precision(2).optional(),
+  ourCost: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(255).optional().allow(''),
+      charges: Joi.number().min(0).optional(),
+      vatAmount: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalOurCosts: Joi.number().min(0).precision(2).optional(),
+  summary: Joi.array().items(
+    Joi.object({
+      label: Joi.string().max(255).optional().allow(''),
+      subTotal: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalAmountRequired: Joi.number().min(0).precision(2).optional()
+});
+
+// Update Financial Statement
+export const updateFinancialStatementSchema = Joi.object({
+  customerName: Joi.string().min(2).max(255).optional(),
+  customerEmail: Joi.string().email().optional(),
+  caseDescription: Joi.string().max(1000).optional().allow(''),
+  completionDate: Joi.date().iso().optional(),
+  matterId: Joi.string().max(255).optional().allow(''),
+  status: Joi.string().valid('draft', 'sent', 'unsent', 'paid', 'overdue', 'cancelled', 'partialyPaid', 'disputed', 'reminder', 'resend', 'void', 'viewed', 'unpaid', 'bad').optional().default("draft"),
+  disbursements: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(255).optional().allow(''),
+      charges: Joi.number().min(0).optional(),
+      vatAmount: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalDisbursements: Joi.number().min(0).precision(2).optional(),
+  ourCost: Joi.array().items(
+    Joi.object({
+      description: Joi.string().max(255).optional().allow(''),
+      charges: Joi.number().min(0).optional(),
+      vatAmount: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalOurCosts: Joi.number().min(0).precision(2).optional(),
+  summary: Joi.array().items(
+    Joi.object({
+      label: Joi.string().max(255).optional().allow(''),
+      subTotal: Joi.number().min(0).precision(2).optional(),
+      total: Joi.number().min(0).precision(2).optional()
+    })
+  ).optional().default([]),
+  totalAmountRequired: Joi.number().min(0).precision(2).optional()
 });

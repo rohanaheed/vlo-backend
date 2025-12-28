@@ -25,6 +25,7 @@ import preSignupMatricRoutes from "./routes/preSignupMatricRoutes";
 import marketingRoutes from "./routes/marketingRoutes";
 import currencyRoutes from "./routes/currencyRoutes";
 import userGroupRoutes from "./routes/userGroupRoutes";
+import financialStatementRoutes from "./routes/financialStatementRoutes";
 import { handleStripeWebhook } from "./controllers/stripWebhookController";
 
 const app = express();
@@ -725,6 +726,7 @@ app.use("/api/pre-signup-metrics", preSignupMatricRoutes);
 app.use("/api/marketing", marketingRoutes);
 app.use("/api/currencies", currencyRoutes);
 app.use("/api/user-groups", userGroupRoutes);
+app.use("/api/financial-statements", financialStatementRoutes)
 
 const PORT = process.env.PORT;
 
