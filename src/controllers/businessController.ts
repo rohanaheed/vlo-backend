@@ -1162,8 +1162,8 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
   }
 
   qb.orderBy("sc.id", order)
-    .skip(skip)
-    .take(limit);
+    .offset(skip)
+    .limit(limit);
 
   const data = await qb.getRawMany();
   const total = await subcategoryRepo.createQueryBuilder("sc")
@@ -1499,8 +1499,8 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
   }
 
   qb.orderBy("cf.createdAt", order)
-    .skip((page - 1) * limit)
-    .take(limit);
+    .offset((page - 1) * limit)
+    .limit(limit);
 
   const data = await qb.getRawMany();
   const total = await customFieldRepo.createQueryBuilder("cf")
@@ -1842,8 +1842,8 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
   }
 
   qb.orderBy("group.createdAt", order)
-    .skip((page - 1) * limit)
-    .take(limit);
+    .offset((page - 1) * limit)
+    .limit(limit);
 
   const data = await qb.getRawMany();
   const totalResult = await customFieldGroupRepo.createQueryBuilder("group")
