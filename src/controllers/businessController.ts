@@ -1943,19 +1943,20 @@ export const getCustomFieldGroupById = async (req: Request, res: Response): Prom
  */
 export const updateCustomFieldGroup = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { title, linkedTo } = req.body;
+  const { title, linkedTo, subcategoryId } = req.body;
 
   const group = await customFieldGroupRepo.findOneBy({ id: Number(id), isDelete: false });
   if (!group) {
-    return res.status(404).json({ message: "CustomFieldGroup not found" });
+    return res.status(404).json({ success: false, message: "CustomFieldGroup not found" });
   }
 
   if (title !== undefined) group.title = title;
   if (linkedTo !== undefined) group.linkedTo = linkedTo;
+  if (subcategoryId !== undefined) group.subcategoryId = subcategoryId;
   group.updatedAt = new Date();
   await customFieldGroupRepo.save(group);
 
-  return res.json(group);
+  return res.json({ success: true, data: group, message: "CustomFieldGroup updated successfully" });
 };
 
 /**
