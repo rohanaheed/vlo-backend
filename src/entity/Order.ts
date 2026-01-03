@@ -19,16 +19,16 @@ export class Order {
   @Column({ type: "varchar", length: 30 })
   orderDate!: string;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   subTotal!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   discount!: number;
 
   @Column({ default: 0 })
   discountType!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   total!: number;
 
   @Column({ type: "enum", enum: ["pending","completed","incomplete","cancelled","processing","failed"], default: "pending" })

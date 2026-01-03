@@ -80,25 +80,25 @@ export class Invoice {
   @Column({  default: false })
   isDiscount!: boolean;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   vat!: number;
 
   @Column({ default: "" })
   discountType!: string;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   discountValue!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   subTotal!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   total!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   outstandingBalance!: number;
 
-  @Column({ default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
   amount!: number;
 
   @Column({ default: "" })
