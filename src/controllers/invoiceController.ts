@@ -9,8 +9,6 @@ import { invoiceSchema, updateInvoiceSchema } from '../utils/validators/inputVal
 import { Between } from 'typeorm';
 import { uploadFileToS3, removeFileFromS3 } from '../utils/s3Utils';
 import path from 'path';
-import { CustomerPackage } from '../entity/CustomerPackage';
-import { Package } from '../entity/Package';
 import { generateInvoicePDF, generateFinancialStatementPDF } from '../utils/pdfUtils';
 import { sendCustomerInvoiceEmail, sendInvoiceReminderEmail } from '../utils/emailUtils';
 import { User } from '../entity/User';
@@ -41,8 +39,7 @@ const convertInvoiceToCustomerCurrency = async (invoice: any, customerCurrencyId
     convertedInvoice.items = invoice.items.map((item: any) => ({
       ...item,
       amount: Number(((item.amount || 0) * exchangeRate).toFixed(2)),
-      subTotal: Number(((item.subTotal || 0) * exchangeRate).toFixed(2)),
-      discount: Number(((item.discount || 0) * exchangeRate).toFixed(2))
+      subTotal: Number(((item.subTotal || 0) * exchangeRate).toFixed(2))
     }));
   }
 
@@ -61,29 +58,10 @@ const calculateInvoiceTotals = (invoice: Invoice): void => {
       const vatRateString = item.vatRate || "0";
       const vatRateNumeric = Number(vatRateString.toString().replace('%', ''));
 
-      // Calculate item subtotal before discount
-      const itemSubTotalBeforeDiscount = quantity * amountInBaseCurrency;
+      // Calculate item subtotal
+      const itemSubTotal = quantity * amountInBaseCurrency;
 
-      // Apply item-level discount dynamically
-      let itemDiscount = 0;
-
-      // Check if discount is already provided as a value
-      if (item.discount && Number(item.discount) > 0) {
-        itemDiscount = Number(item.discount);
-      }
-      // Otherwise, calculate from discountType percentage if available
-      else if (item.discountType) {
-        const discountTypeString = item.discountType.toString();
-        const discountPercent = Number(discountTypeString.replace('%', ''));
-        if (discountPercent > 0) {
-          itemDiscount = (itemSubTotalBeforeDiscount * discountPercent) / 100;
-        }
-      }
-
-      // Apply discount to get final subtotal
-      const itemSubTotal = itemSubTotalBeforeDiscount - itemDiscount;
-
-      // Calculate VAT on the discounted amount
+      // Calculate VAT
       const itemVatAmount = (itemSubTotal * vatRateNumeric) / 100;
 
       calculatedSubTotal += itemSubTotal;
@@ -93,7 +71,6 @@ const calculateInvoiceTotals = (invoice: Invoice): void => {
         ...item,
         amount: amountInBaseCurrency,
         subTotal: itemSubTotal,
-        discount: itemDiscount,
         vatRate: vatRateString
       };
     });

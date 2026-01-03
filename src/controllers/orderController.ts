@@ -69,58 +69,59 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
     const addOns = customerPackage.addOns ?? [];
 
-    // Calculate package price and discount in Base Currency
+    const invoiceItems = [];
+
+    // Calculate package in base currency
     const packagePrice = pkg.billingCycle === "Annual" ? Number(pkg.priceYearly ?? 0) : Number(pkg.priceMonthly ?? 0);
     const packageDiscountPercent = pkg.discount ?? 0;
     const packageDiscountAmount = (packagePrice * packageDiscountPercent) / 100;
-    const packageFinalPrice = packagePrice - packageDiscountAmount;
+    const packageSubTotal = packagePrice;
 
-    // Calculate add-ons in Base currency
-    let addOnsSubTotal = 0;
-    let addOnsFinalTotal = 0;
-    for (const addOn of addOns) {
-      const price = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
-      addOnsSubTotal += price;
-      const discount = addOn.discount ?? 0;
-      addOnsFinalTotal += price - (price * discount) / 100;
-    }
-
-    const subTotal = packagePrice + addOnsSubTotal;
-    const total = packageFinalPrice + addOnsFinalTotal;
-    const totalDiscount = subTotal - total;
-
-    const invoiceItems = [];
-
-    // Add package details
+    // Add package to invoice items
     invoiceItems.push({
       description: `${pkg.name} - ${pkg.billingCycle}`,
       quantity: 1,
       amount: Number(packagePrice.toFixed(2)),
-      subTotal: Number(packageFinalPrice.toFixed(2)),
+      subTotal: Number(packageSubTotal.toFixed(2)),
       discount: Number(packageDiscountAmount.toFixed(2)),
       discountType: `${packageDiscountPercent}%`,
       vatRate: "",
       vatType: ""
     });
 
+    // Calculate add-ons in Base currency
+    let addOnsSubTotal = 0;
+    let addOnsDiscount = 0;
+    let totalDiscountPercent = packageDiscountPercent;
+
     for (const addOn of addOns) {
-      const price = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
-      const discount = addOn.discount ?? 0;
-      const discountAmount = (price * discount) / 100;
-      const finalPrice = price - discountAmount;
+      const addOnPrice = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
+      const addOnDiscountPercent = addOn.discount ?? 0;
+      const addOnDiscountAmount = (addOnPrice * addOnDiscountPercent) / 100;
+      const addOnItemSubTotal = addOnPrice;
 
       invoiceItems.push({
         description: `Add-on: ${addOn.feature}`,
         quantity: 1,
-        amount: Number(price.toFixed(2)),
-        subTotal: Number(finalPrice.toFixed(2)),
-        discount: Number(discountAmount.toFixed(2)),
-        discountType: `${discount}%`,
+        amount: Number(addOnPrice.toFixed(2)),
+        subTotal: Number(addOnItemSubTotal.toFixed(2)),
+        discount: Number(addOnDiscountAmount.toFixed(2)),
+        discountType: `${addOnDiscountPercent}%`,
         vatRate: "",
         vatType: ""
       });
+
+      addOnsSubTotal += addOnItemSubTotal;
+      addOnsDiscount += addOnDiscountAmount;
+      totalDiscountPercent += addOnDiscountPercent;
     }
 
+    // Calculate totals
+    const subTotal = packageSubTotal + addOnsSubTotal;
+    const discount = packageDiscountAmount + addOnsDiscount;
+    const total = subTotal - discount;
+    const invoiceDiscountType = `${totalDiscountPercent}%`;
+    
     // Generate order number
     const orderNumber = `${Math.floor(Math.random() * 90000) + 10000}`;
 
@@ -132,8 +133,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
       customOrderNumber: `CUST-ORD-${orderNumber}`,
       orderDate: new Date().toISOString(),
       subTotal: Number(subTotal.toFixed(2)),
-      discount: Number(totalDiscount.toFixed(2)),
-      discountType: packageDiscountPercent,
+      discount: Number(discount.toFixed(2)),
+      discountType: totalDiscountPercent,
       total: Number(total.toFixed(2)),
       status: "pending",
       note,
@@ -149,9 +150,9 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     if (pkg.billingCycle === "Annual") {
       dueDate.setFullYear(dueDate.getFullYear() + 1);
     } else {
-      dueDate.setMonth(dueDate.getMonth() + 1);
+        dueDate.setMonth(dueDate.getMonth() + 1);
     }
-
+    
     // Prepare client address string
     const addressParts = [
       customer.businessAddress?.buildingNumber || '',
@@ -178,12 +179,17 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
       currencyId: customer.currencyId,
       orderId: newOrder.id,
       subTotal: Number(subTotal.toFixed(2)),
+      discountValue: Number(discount.toFixed(2)),
+      discountType: invoiceDiscountType,
       outstandingBalance: Number(total.toFixed(2)),
       dueDate: dueDate,
       IssueDate: new Date(),
       vat: 0,
       items: invoiceItems,
     });
+    if(discount >=0){
+        newInvoice.isDiscount = true
+    }
     await invoiceRepo.save(newInvoice);
 
     return res.status(201).json({
