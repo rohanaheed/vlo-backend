@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, rgb, PDFImage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { REGULATORY_INFO } from './constants/regulatoryInfo';
 
@@ -19,25 +19,37 @@ export const generateInvoicePDF = async (invoiceData: {
   const page = pdfDoc.addPage([595, 842]);
   const { width, height } = page.getSize();
 
-  const fontPath = path.join(__dirname, '../utils/fonts/NotoSans-VariableFont.ttf');
-  const fontBytes = fs.readFileSync(fontPath);
-  const regularFont = await pdfDoc.embedFont(fontBytes);
-  const boldFont = regularFont;
+  const LightFontPath = path.resolve(__dirname, '../public/fonts/NotoSans-Light.ttf');
+  const BoldFontPath = path.resolve(__dirname, '../public/fonts/NotoSans-SemiBold.ttf');
+  const logoPath = path.resolve(__dirname, '../public/images/vhr_logo.png');
+
+  const LightFontBytes = fs.readFileSync(LightFontPath);
+  const BoldFontBytes = fs.readFileSync(BoldFontPath);
+  const regularFont = await pdfDoc.embedFont(LightFontBytes);
+  const boldFont = await pdfDoc.embedFont(BoldFontBytes);
+
+  // Load and embed logo
+  let logoImage : PDFImage | null = null
+  try {
+    const logoBytes = fs.readFileSync(logoPath);
+    logoImage = await pdfDoc.embedPng(logoBytes);
+  } catch (error) {
+    console.error('Error loading logo:', error);
+  }
 
   const currencySymbol = currency?.currencySymbol || '£';
   const currencyCode = currency?.currencyCode || 'GBP';
   const exchangeRate = currency?.exchangeRate || 1;
-  
-  const tealColor = rgb(0.0, 0.5, 0.47); 
-  const lightGray = rgb(0.96, 0.96, 0.96);
-  const textBlack = rgb(0, 0, 0); 
-  const textGray = rgb(0.4, 0.4, 0.4);
-  
+
+  const tealColor = rgb(0.0, 0.5, 0.47);
+  const lightGray = rgb(0.85, 0.85, 0.85);
+  const text = rgb(0, 0, 0);
+
   const leftMargin = 30;
   const rightMargin = 30;
   let yPosition = height - 50;
 
-  // Wrap Text
+  // Wrap Text with Justification Support
   const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
     const words = text.split(' ');
     const lines: string[] = [];
@@ -58,41 +70,116 @@ export const generateInvoicePDF = async (invoiceData: {
     }
     return lines;
   };
-// Top Bar
-  page.drawRectangle({
-    x: 0,
-    y: height - 40,
-    width: width,
-    height: 40,
-    color: tealColor
-  });
 
-  // page.drawText('[LOGO: Virtual HR Systems]', {
-  //   x: leftMargin,
-  //   y: height - 28,
-  //   size: 8,
-  //   font: regularFont,
-  //   color: rgb(1, 1, 1)
-  // });
-// Invoice Title
+  // Justify text function
+  const justifyText = (text: string, maxWidth: number, fontSize: number, isLastLine: boolean = false): string => {
+    if (isLastLine) return text;
+    
+    const words = text.split(' ');
+    if (words.length === 1) return text;
+
+    const wordWidths = words.map(word => regularFont.widthOfTextAtSize(word, fontSize));
+    const totalWordWidth = wordWidths.reduce((sum, w) => sum + w, 0);
+    const spaceWidth = regularFont.widthOfTextAtSize(' ', fontSize);
+    
+    const totalSpaceWidth = maxWidth - totalWordWidth;
+    const spaceCount = words.length - 1;
+    const adjustedSpaceWidth = totalSpaceWidth / spaceCount;
+    const spacesNeeded = Math.max(1, Math.round(adjustedSpaceWidth / spaceWidth));
+
+    return words.join(' '.repeat(spacesNeeded));
+  };
+
+  // Top Bar
+  const topBarHeight = 12;
+  const diagonalWidth = 40;
+  const colorBoundary = width * 0.75;
+
+  for (let x = 0; x < width; x++) {
+    if (x < colorBoundary - diagonalWidth) {
+      // Left section: solid teal
+      page.drawRectangle({
+        x: x,
+        y: height - topBarHeight,
+        width: 1,
+        height: topBarHeight,
+        color: tealColor
+      });
+    } else if (x >= colorBoundary - diagonalWidth && x < colorBoundary) {
+      const progress = (x - (colorBoundary - diagonalWidth)) / diagonalWidth;
+      const currentHeight = topBarHeight * (1 - progress);
+
+      page.drawRectangle({
+        x: x,
+        y: height - currentHeight,
+        width: 1,
+        height: currentHeight,
+        color: tealColor
+      });
+
+      if (currentHeight < topBarHeight) {
+        page.drawRectangle({
+          x: x,
+          y: height - topBarHeight,
+          width: 1,
+          height: topBarHeight - currentHeight,
+          color: lightGray
+        });
+      }
+    } else {
+      // Right section: solid light gray
+      page.drawRectangle({
+        x: x,
+        y: height - topBarHeight,
+        width: 1,
+        height: topBarHeight,
+        color: lightGray
+      });
+    }
+  }
+
+  yPosition = height - topBarHeight - 40;
+
+  if (logoImage) {
+    const logoWidth = 110;
+    const logoHeight = 55;
+    page.drawImage(logoImage, {
+      x: leftMargin,
+      y: yPosition - 25,
+      width: logoWidth,
+      height: logoHeight
+    });
+  } else {
+    page.drawText('Virtual HR Systems', {
+      x: leftMargin,
+      y: yPosition,
+      size: 10,
+      font: boldFont,
+      color: text
+    });
+  }
+
+  // Invoice Title
   page.drawText('Invoice', {
-    x: width - 100,
-    y: height - 28,
-    size: 18,
+    x: width - 160,
+    y: yPosition + 5,
+    size: 20,
     font: boldFont,
-    color: rgb(1, 1, 1)
+    color: text
   });
 
-  yPosition = height - 60;
-// Referenc Number
-  page.drawText(`Reference: ${invoice.matterId || invoice.referenceNumber || 'ADM/1026.00'}`, {
+  yPosition -= 60;
+
+  // Reference Number
+  page.drawText(`Reference: ${invoice.matterId || invoice.referenceNumber}`, {
     x: leftMargin,
     y: yPosition,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
-// Invoice Details
+
+  // Invoice Details
   const invoiceDetailsX = width - 180;
   let rightY = yPosition;
 
@@ -101,14 +188,14 @@ export const generateInvoicePDF = async (invoiceData: {
     y: rightY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
-  page.drawText(invoice.invoiceNumber || 'INV-00001', {
+  page.drawText(invoice.invoiceNumber, {
     x: invoiceDetailsX + 95,
     y: rightY,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
 
   rightY -= 14;
@@ -118,7 +205,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: rightY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText(
     new Date(invoice.IssueDate).toLocaleDateString('en-GB'),
@@ -127,7 +214,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: rightY,
       size: 9,
       font: regularFont,
-      color: textBlack
+      color: text
     }
   );
 
@@ -138,16 +225,16 @@ export const generateInvoicePDF = async (invoiceData: {
     y: rightY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText(
-    invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-GB') : '30-05-2025',
+    new Date(invoice.dueDate).toLocaleDateString('en-GB'),
     {
       x: invoiceDetailsX + 95,
       y: rightY,
       size: 9,
       font: regularFont,
-      color: textBlack
+      color: text
     }
   );
 
@@ -162,7 +249,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: leftY,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   leftY -= 16;
@@ -172,7 +259,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: leftY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   leftY -= 12;
@@ -188,7 +275,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: leftY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     leftY -= 11;
   }
@@ -198,7 +285,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: leftY,
     size: 8,
     font: regularFont,
-    color: textGray
+    color: text
   });
   leftY -= 11;
 
@@ -208,7 +295,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: leftY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     leftY -= 11;
   }
@@ -222,7 +309,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: rightY,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   rightY -= 16;
@@ -232,7 +319,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: rightY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   rightY -= 12;
@@ -246,7 +333,7 @@ export const generateInvoicePDF = async (invoiceData: {
         y: rightY,
         size: 8,
         font: regularFont,
-        color: textGray
+        color: text
       });
       rightY -= 11;
     }
@@ -259,7 +346,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: rightY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     rightY -= 11;
   }
@@ -270,7 +357,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: rightY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     rightY -= 11;
   }
@@ -284,7 +371,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: yPosition,
       size: 10,
       font: boldFont,
-      color: textBlack
+      color: text
     });
 
     yPosition -= 14;
@@ -296,13 +383,14 @@ export const generateInvoicePDF = async (invoiceData: {
         y: yPosition,
         size: 9,
         font: regularFont,
-        color: textGray
+        color: text
       });
       yPosition -= 12;
     }
     yPosition -= 5;
   }
-// Items Table
+
+  // Items Table
   yPosition -= 15;
 
   const col1X = leftMargin;
@@ -324,7 +412,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition + 2,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   page.drawText('Qty / Hours', {
@@ -332,7 +420,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition + 2,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   page.drawText(`Amount (${currencyCode})`, {
@@ -340,7 +428,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition + 2,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   page.drawText('VAT Rate', {
@@ -348,7 +436,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition + 2,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   page.drawText('Sub-Total', {
@@ -356,7 +444,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition + 2,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 22;
@@ -374,7 +462,7 @@ export const generateInvoicePDF = async (invoiceData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       page.drawText((item.quantity || 0).toString(), {
@@ -382,7 +470,7 @@ export const generateInvoicePDF = async (invoiceData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       page.drawText(`${currencySymbol} ${(item.amount * exchangeRate || 0).toFixed(2)}`, {
@@ -390,16 +478,16 @@ export const generateInvoicePDF = async (invoiceData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
-      const vatRate = item.vatRate ;
+      const vatRate = item.vatRate || 0;
       page.drawText(`${vatRate}`, {
         x: col4X + 5,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       page.drawText(`${currencySymbol} ${(item.subTotal * exchangeRate || 0).toFixed(2)}`, {
@@ -407,7 +495,7 @@ export const generateInvoicePDF = async (invoiceData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       yPosition -= 16;
@@ -420,7 +508,7 @@ export const generateInvoicePDF = async (invoiceData: {
             y: yPosition,
             size: 8,
             font: regularFont,
-            color: textGray
+            color: text
           });
           yPosition -= 12;
         }
@@ -430,16 +518,13 @@ export const generateInvoicePDF = async (invoiceData: {
 
   yPosition -= 20;
 
-  // Notes and Total
-  const notesStartY = yPosition;
-  
   // Notes
   page.drawText('Notes:', {
     x: leftMargin,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   let notesY = yPosition - 14;
@@ -452,7 +537,7 @@ export const generateInvoicePDF = async (invoiceData: {
         y: notesY,
         size: 8,
         font: regularFont,
-        color: textGray
+        color: text
       });
       notesY -= 11;
     }
@@ -468,14 +553,14 @@ export const generateInvoicePDF = async (invoiceData: {
     y: totalsY,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
   page.drawText(`${currencySymbol} ${(invoice.subTotal * exchangeRate || 0).toFixed(2)}`, {
     x: totalsValueX,
     y: totalsY,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
 
   totalsY -= 14;
@@ -485,33 +570,33 @@ export const generateInvoicePDF = async (invoiceData: {
     y: totalsY,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
   page.drawText(`${currencySymbol} ${(invoice.vat * exchangeRate || 0).toFixed(2)}`, {
     x: totalsValueX,
     y: totalsY,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
 
   totalsY -= 14;
 
   if (invoice.isDiscount && invoice.discountValue >= 0) {
-    const discountLabel = invoice.discountType ;
+    const discountLabel = invoice.discountType;
     page.drawText(`Discount ${discountLabel}:`, {
       x: totalsX,
       y: totalsY,
       size: 9,
       font: regularFont,
-      color: textBlack
+      color: text
     });
     page.drawText(`${currencySymbol} ${(invoice.discountValue * exchangeRate || 0).toFixed(2)}`, {
       x: totalsValueX,
       y: totalsY,
       size: 9,
       font: regularFont,
-      color: textBlack
+      color: text
     });
     totalsY -= 14;
   }
@@ -520,7 +605,7 @@ export const generateInvoicePDF = async (invoiceData: {
     start: { x: totalsX - 10, y: totalsY + 3 },
     end: { x: width - rightMargin, y: totalsY + 3 },
     thickness: 1,
-    color: textBlack
+    color: text
   });
 
   totalsY -= 10;
@@ -530,14 +615,14 @@ export const generateInvoicePDF = async (invoiceData: {
     y: totalsY,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText(`${currencySymbol} ${(invoice.total * exchangeRate || 0).toFixed(2)}`, {
     x: totalsValueX,
     y: totalsY,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition = Math.min(notesY, totalsY) - 25;
@@ -548,7 +633,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 14;
@@ -558,7 +643,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition,
     size: 8,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   yPosition -= 18;
@@ -569,7 +654,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: yPosition,
     size: 7,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   yPosition -= 25;
@@ -584,7 +669,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: bankY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   bankY -= 14;
@@ -602,7 +687,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: bankY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     bankY -= 11;
   }
@@ -616,7 +701,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: disbursementsY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   disbursementsY -= 14;
@@ -633,7 +718,7 @@ export const generateInvoicePDF = async (invoiceData: {
       y: disbursementsY,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     disbursementsY -= 11;
   }
@@ -653,7 +738,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: bottomY - 30,
     size: 7,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   // Signature area
@@ -665,14 +750,14 @@ export const generateInvoicePDF = async (invoiceData: {
     y: signatureY + 10,
     size: 7,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   page.drawLine({
     start: { x: signatureX, y: signatureY },
     end: { x: width - rightMargin, y: signatureY },
     thickness: 1,
-    color: textBlack
+    color: text
   });
 
   page.drawText('Mr John Doe', {
@@ -680,7 +765,7 @@ export const generateInvoicePDF = async (invoiceData: {
     y: signatureY - 15,
     size: 9,
     font: regularFont,
-    color: textBlack
+    color: text
   });
 
   page.drawText('Executive Director', {
@@ -688,185 +773,339 @@ export const generateInvoicePDF = async (invoiceData: {
     y: signatureY - 28,
     size: 8,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   // Bottom Bar
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: width,
-    height: 40,
-    color: tealColor
-  });
+  const bottomBarHeight = 12;
+  const bottomDiagonalWidth = 40; // Width of the diagonal cut
+  const bottomColorBoundary = width * 0.25;
+
+  for (let x = 0; x < width; x++) {
+    if (x < bottomColorBoundary - bottomDiagonalWidth) {
+      // Left section: solid dark gray
+      page.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: bottomBarHeight,
+        color: lightGray
+      });
+    } else if (x >= bottomColorBoundary - bottomDiagonalWidth && x < bottomColorBoundary) {
+      const progress = (x - (bottomColorBoundary - bottomDiagonalWidth)) / bottomDiagonalWidth;
+      const currentHeight = bottomBarHeight * (1 - progress);
+
+      page.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: currentHeight,
+        color: lightGray
+      });
+
+      if (currentHeight < bottomBarHeight) {
+        page.drawRectangle({
+          x: x,
+          y: currentHeight,
+          width: 1,
+          height: bottomBarHeight - currentHeight,
+          color: tealColor
+        });
+      }
+    } else {
+      // Right section: solid teal
+      page.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: bottomBarHeight,
+        color: tealColor
+      });
+    }
+  }
 
   // Regulatory Information
   if (invoice.includeRegulatoryInfo) {
     let currentRegPage = pdfDoc.addPage([595, 842]);
     const regWidth = currentRegPage.getSize().width;
     const regHeight = currentRegPage.getSize().height;
-    let regY = regHeight - 100;
+    let regY = regHeight - 80;
     const regMargin = 50;
     const maxWidth = regWidth - (regMargin * 2);
-    const bottomMargin = 60;
+    const bottomMargin = 80;
+    const fontSize = 9;
+    const titleFontSize = 11;
+    const lineHeight = fontSize * 1.5;
 
-    // Add header to first page
     const addRegHeader = (regPage: any) => {
-      regPage.drawRectangle({
-        x: 0,
-        y: regHeight - 60,
-        width: regWidth,
-        height: 60,
-        color: tealColor
-      });
+      const regTopBarHeight = 12;
+      const regDiagonalWidth = 40;
 
+      const regColorBoundary = regWidth * 0.75;
+
+      for (let x = 0; x < regWidth; x++) {
+        if (x < regColorBoundary - regDiagonalWidth) {
+          // Left section: solid teal
+          regPage.drawRectangle({
+            x: x,
+            y: regHeight - regTopBarHeight,
+            width: 1,
+            height: regTopBarHeight,
+            color: tealColor
+          });
+        } else if (x >= regColorBoundary - regDiagonalWidth && x < regColorBoundary) {
+          const progress = (x - (regColorBoundary - regDiagonalWidth)) / regDiagonalWidth;
+          const currentHeight = regTopBarHeight * (1 - progress);
+
+          regPage.drawRectangle({
+            x: x,
+            y: regHeight - currentHeight,
+            width: 1,
+            height: currentHeight,
+            color: tealColor
+          });
+
+          if (currentHeight < regTopBarHeight) {
+            regPage.drawRectangle({
+              x: x,
+              y: regHeight - regTopBarHeight,
+              width: 1,
+              height: regTopBarHeight - currentHeight,
+              color: lightGray
+            });
+          }
+        } else {
+          // Right section: solid light gray
+          regPage.drawRectangle({
+            x: x,
+            y: regHeight - regTopBarHeight,
+            width: 1,
+            height: regTopBarHeight,
+            color: lightGray
+          });
+        }
+      }
+
+      let regHeaderY = regHeight - regTopBarHeight - 60;
+
+      // Regulatory Information title
       regPage.drawText('Regulatory Information', {
         x: regMargin,
-        y: regHeight - 35,
-        size: 18,
+        y: regHeaderY + 20,
+        size: 16,
         font: boldFont,
-        color: rgb(1, 1, 1)
+        color: text
       });
     };
 
-    // Add footer to page
+    // Bottom Bar
     const addRegFooter = (regPage: any) => {
-      regPage.drawLine({
-        start: { x: regMargin, y: 45 },
-        end: { x: regWidth - regMargin, y: 45 },
-        thickness: 1,
-        color: rgb(0.7, 0.7, 0.7)
-      });
+      const regBottomBarHeight = 12;
+      const regBottomDiagonalWidth = 40;
 
+      const regBottomColorBoundary = regWidth * 0.25;
+
+      for (let x = 0; x < regWidth; x++) {
+        if (x < regBottomColorBoundary - regBottomDiagonalWidth) {
+          // Left section: solid dark gray
+          regPage.drawRectangle({
+            x: x,
+            y: 0,
+            width: 1,
+            height: regBottomBarHeight,
+            color: lightGray
+          });
+        } else if (x >= regBottomColorBoundary - regBottomDiagonalWidth && x < regBottomColorBoundary) {
+          const progress = (x - (regBottomColorBoundary - regBottomDiagonalWidth)) / regBottomDiagonalWidth;
+          const currentHeight = regBottomBarHeight * (1 - progress);
+
+          regPage.drawRectangle({
+            x: x,
+            y: 0,
+            width: 1,
+            height: currentHeight,
+            color: lightGray
+          });
+
+          // Fill the top part with teal
+          if (currentHeight < regBottomBarHeight) {
+            regPage.drawRectangle({
+              x: x,
+              y: currentHeight,
+              width: 1,
+              height: regBottomBarHeight - currentHeight,
+              color: tealColor
+            });
+          }
+        } else {
+          // Right section: solid teal
+          regPage.drawRectangle({
+            x: x,
+            y: 0,
+            width: 1,
+            height: regBottomBarHeight,
+            color: tealColor
+          });
+        }
+      }
+
+      // Footer
       regPage.drawText(
         'This information is provided in accordance with legal requirements.',
         {
           x: regMargin,
-          y: 30,
+          y: 25,
           size: 7,
           font: regularFont,
-          color: textGray
+          color: text
         }
       );
     };
 
-    // Check if new page needed
+    // Check page needed
     const checkNewPage = (requiredSpace: number) => {
       if (regY - requiredSpace < bottomMargin) {
         addRegFooter(currentRegPage);
         currentRegPage = pdfDoc.addPage([595, 842]);
         addRegHeader(currentRegPage);
-        regY = regHeight - 100;
+        regY = regHeight - 80;
       }
     };
 
     addRegHeader(currentRegPage);
 
-    // Section 1: Complaining about our bill
-    checkNewPage(30);
+    // Complaining about our bill
+    checkNewPage(titleFontSize + lineHeight * 2);
     currentRegPage.drawText(REGULATORY_INFO.complainingAboutBill.title, {
       x: regMargin,
       y: regY,
-      size: 12,
+      size: titleFontSize,
       font: boldFont,
-      color: textBlack
+      color: text
     });
-    regY -= 20;
+    regY -= lineHeight * 1.8;
 
     const complainLines = wrapText(
       REGULATORY_INFO.complainingAboutBill.content,
       maxWidth,
-      9
+      fontSize
     );
-    for (const line of complainLines) {
-      checkNewPage(15);
-      currentRegPage.drawText(line, {
+    
+    for (let i = 0; i < complainLines.length; i++) {
+      checkNewPage(lineHeight);
+      const isLastLine = i === complainLines.length - 1;
+      const justifiedLine = justifyText(complainLines[i], maxWidth, fontSize, isLastLine);
+      
+      currentRegPage.drawText(justifiedLine, {
         x: regMargin,
         y: regY,
-        size: 9,
+        size: fontSize,
         font: regularFont,
-        color: textGray
+        color: text
       });
-      regY -= 12;
+      regY -= lineHeight;
     }
 
-    regY -= 15;
+    regY -= lineHeight;
 
-    // Section 2: Challenging our bill
-    checkNewPage(30);
+    // Challenging our bill
+    checkNewPage(titleFontSize + lineHeight * 2);
     currentRegPage.drawText(REGULATORY_INFO.challengingBill.title, {
       x: regMargin,
       y: regY,
-      size: 12,
+      size: titleFontSize,
       font: boldFont,
-      color: textBlack
+      color: text
     });
-    regY -= 20;
+    regY -= lineHeight * 1.8;
 
     const challengeLines = wrapText(
       REGULATORY_INFO.challengingBill.content,
       maxWidth,
-      9
+      fontSize
     );
-    for (const line of challengeLines) {
-      checkNewPage(15);
-      currentRegPage.drawText(line, {
+    
+    for (let i = 0; i < challengeLines.length; i++) {
+      checkNewPage(lineHeight);
+      const isLastLine = i === challengeLines.length - 1;
+      const justifiedLine = justifyText(challengeLines[i], maxWidth, fontSize, isLastLine);
+      
+      currentRegPage.drawText(justifiedLine, {
         x: regMargin,
         y: regY,
-        size: 9,
+        size: fontSize,
         font: regularFont,
-        color: textGray
+        color: text
       });
-      regY -= 12;
+      regY -= lineHeight;
     }
 
-    regY -= 10;
+    regY -= lineHeight * 0.5;
 
-    // Conditions (bullets already in text)
+    // Conditions with bullets
     for (const condition of REGULATORY_INFO.challengingBill.conditions) {
-      checkNewPage(15);
-      const conditionLines = wrapText(condition, maxWidth - 10, 9);
+      checkNewPage(lineHeight * 2);
+
+      const conditionText = condition.startsWith('•') ? condition.substring(1).trim() : condition;
+      const conditionLines = wrapText(conditionText, maxWidth - 20, fontSize);
+
       for (let i = 0; i < conditionLines.length; i++) {
-        checkNewPage(15);
+        checkNewPage(lineHeight);
+
+        if (i === 0) {
+          currentRegPage.drawText('•', {
+            x: regMargin + 5,
+            y: regY,
+            size: fontSize,
+            font: regularFont,
+            color: text
+          });
+        }
+
         currentRegPage.drawText(conditionLines[i], {
-          x: regMargin + 10,
+          x: regMargin + 20,
           y: regY,
-          size: 9,
+          size: fontSize,
           font: regularFont,
-          color: textGray
+          color: text
         });
-        regY -= 12;
+        regY -= lineHeight;
       }
-      regY -= 3;
+      regY -= lineHeight * 0.3;
     }
 
-    regY -= 15;
+    regY -= lineHeight * 0.5;
 
-    checkNewPage(30);
+    // Unpaid bills
+    checkNewPage(titleFontSize + lineHeight * 2);
     currentRegPage.drawText(REGULATORY_INFO.unpaidBills.title, {
       x: regMargin,
       y: regY,
-      size: 12,
+      size: titleFontSize,
       font: boldFont,
-      color: textBlack
+      color: text
     });
-    regY -= 20;
+    regY -= lineHeight * 1.8;
 
     const unpaidLines = wrapText(
       REGULATORY_INFO.unpaidBills.content,
       maxWidth,
-      9
+      fontSize
     );
-    for (const line of unpaidLines) {
-      checkNewPage(15);
-      currentRegPage.drawText(line, {
+    
+    for (let i = 0; i < unpaidLines.length; i++) {
+      checkNewPage(lineHeight);
+      const isLastLine = i === unpaidLines.length - 1;
+      const justifiedLine = justifyText(unpaidLines[i], maxWidth, fontSize, isLastLine);
+      
+      currentRegPage.drawText(justifiedLine, {
         x: regMargin,
         y: regY,
-        size: 9,
+        size: fontSize,
         font: regularFont,
-        color: textGray
+        color: text
       });
-      regY -= 12;
+      regY -= lineHeight;
     }
 
     addRegFooter(currentRegPage);
@@ -890,18 +1129,20 @@ export const generateFinancialStatementPDF = async (financialData: {
   const { width, height } = page.getSize();
   let yPosition = height - 50;
 
-  const fontPath = path.join(__dirname, '../utils/fonts/NotoSans-VariableFont.ttf');
-  const fontBytes = fs.readFileSync(fontPath);
-  const regularFont = await pdfDoc.embedFont(fontBytes);
-  const boldFont = regularFont;
+ const LightFontPath = path.resolve(__dirname, '../public/fonts/NotoSans-Light.ttf');
+ const BoldFontPath = path.resolve(__dirname, '../public/fonts/NotoSans-SemiBold.ttf');
+ const LightFontBytes = fs.readFileSync(LightFontPath);
+ const BoldFontBytes = fs.readFileSync(BoldFontPath);
+ const regularFont = await pdfDoc.embedFont(LightFontBytes);
+ const boldFont = await pdfDoc.embedFont(BoldFontBytes);
+
 
   const currencySymbol = currency?.currencySymbol || '£';
   const exchangeRate = currency?.exchangeRate || 1;
 
-  const tealColor = rgb(0.0, 0.5, 0.47); 
-  const lightGray = rgb(0.96, 0.96, 0.96);
-  const textBlack = rgb(0, 0, 0); 
-  const textGray = rgb(0.4, 0.4, 0.4);
+  const tealColor = rgb(0.0, 0.5, 0.47);
+  const lightGray = rgb(0.85, 0.85, 0.85);
+  const text = rgb(0, 0, 0);
 
   const leftMargin = 30;
   const rightMargin = 30;
@@ -932,33 +1173,64 @@ export const generateFinancialStatementPDF = async (financialData: {
   };
 
   // Top Bar
-  page.drawRectangle({
-    x: 0,
-    y: height - 40,
-    width: width,
-    height: 40,
-    color: tealColor
-  });
+  const fsTopBarHeight = 12;
+  const fsDiagonalWidth = 40;
+  const fsColorBoundary = width * 0.75;
 
-  // Logo
-  page.drawText('[LOGO: Virtual HR Systems]', {
-    x: leftMargin,
-    y: height - 28,
-    size: 8,
-    font: regularFont,
-    color: rgb(1, 1, 1)
-  });
+  for (let x = 0; x < width; x++) {
+    if (x < fsColorBoundary - fsDiagonalWidth) {
+      // Left section: solid teal
+      page.drawRectangle({
+        x: x,
+        y: height - fsTopBarHeight,
+        width: 1,
+        height: fsTopBarHeight,
+        color: tealColor
+      });
+    } else if (x >= fsColorBoundary - fsDiagonalWidth && x < fsColorBoundary) {
+      const progress = (x - (fsColorBoundary - fsDiagonalWidth)) / fsDiagonalWidth;
+      const currentHeight = fsTopBarHeight * (1 - progress);
+
+      page.drawRectangle({
+        x: x,
+        y: height - currentHeight,
+        width: 1,
+        height: currentHeight,
+        color: tealColor
+      });
+      if (currentHeight < fsTopBarHeight) {
+        page.drawRectangle({
+          x: x,
+          y: height - fsTopBarHeight,
+          width: 1,
+          height: fsTopBarHeight - currentHeight,
+          color: lightGray
+        });
+      }
+    } else {
+      // Right section: solid light gray
+      page.drawRectangle({
+        x: x,
+        y: height - fsTopBarHeight,
+        width: 1,
+        height: fsTopBarHeight,
+        color: lightGray
+      });
+    }
+  }
+
+  yPosition = height - fsTopBarHeight - 40;
 
   // Title
   page.drawText('FINANCIAL STATEMENT', {
-    x: width - 250,
-    y: height - 28,
+    x: leftMargin,
+    y: yPosition + 5,
     size: 18,
     font: boldFont,
-    color: rgb(1, 1, 1)
+    color: text
   });
 
-  yPosition = height - 70;
+  yPosition -= 60;
 
   // Info
   const leftInfoX = leftMargin + 5;
@@ -969,14 +1241,14 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: leftInfoY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText(financialStatement.matterId || 'N/A', {
     x: leftInfoX + 70,
     y: leftInfoY,
     size: 9,
     font: regularFont,
-    color: textGray
+    color: text
   });
   leftInfoY -= 16;
 
@@ -985,14 +1257,14 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: leftInfoY,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText(new Date(financialStatement.createdAt).toLocaleDateString('en-GB'), {
     x: leftInfoX + 85,
     y: leftInfoY,
     size: 9,
     font: regularFont,
-    color: textGray
+    color: text
   });
   leftInfoY -= 16;
 
@@ -1002,14 +1274,14 @@ export const generateFinancialStatementPDF = async (financialData: {
       y: leftInfoY,
       size: 9,
       font: boldFont,
-      color: textBlack
+      color: text
     });
     page.drawText(new Date(financialStatement.completionDate).toLocaleDateString('en-GB'), {
       x: leftInfoX + 110,
       y: leftInfoY,
       size: 9,
       font: regularFont,
-      color: textGray
+      color: text
     });
     leftInfoY -= 16;
   }
@@ -1022,7 +1294,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 11,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   yPosition -= 18;
 
@@ -1031,7 +1303,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   yPosition -= 14;
 
@@ -1043,7 +1315,7 @@ export const generateFinancialStatementPDF = async (financialData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textGray
+        color: text
       });
       yPosition -= 11;
     }
@@ -1057,7 +1329,7 @@ export const generateFinancialStatementPDF = async (financialData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textGray
+        color: text
       });
       yPosition -= 11;
     }
@@ -1080,11 +1352,11 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 12,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   yPosition -= 20;
 
-  // Table header with light gray background
+  // Table
   page.drawRectangle({
     x: leftMargin - 5,
     y: yPosition - 2,
@@ -1098,28 +1370,28 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText('Charges', {
     x: 300,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText('VAT', {
     x: 400,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   page.drawText('Total', {
     x: 490,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 22;
@@ -1142,10 +1414,10 @@ export const generateFinancialStatementPDF = async (financialData: {
           color: lightGray
         });
         
-        currentPage.drawText('Description', { x: leftMargin, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('Charges', { x: 300, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('VAT', { x: 400, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('Total', { x: 490, y: yPosition, size: 9, font: boldFont, color: textBlack });
+        currentPage.drawText('Description', { x: leftMargin, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('Charges', { x: 300, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('VAT', { x: 400, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('Total', { x: 490, y: yPosition, size: 9, font: boldFont, color: text });
         
         yPosition -= 22;
       }
@@ -1163,28 +1435,28 @@ export const generateFinancialStatementPDF = async (financialData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${charges.toFixed(2)}`, {
         x: 300,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${vatAmount.toFixed(2)}`, {
         x: 400,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${total.toFixed(2)}`, {
         x: 490,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       yPosition -= 14;
@@ -1197,7 +1469,7 @@ export const generateFinancialStatementPDF = async (financialData: {
             y: yPosition,
             size: 8,
             font: regularFont,
-            color: textGray
+            color: text
           });
           yPosition -= 11;
         }
@@ -1209,7 +1481,7 @@ export const generateFinancialStatementPDF = async (financialData: {
       y: yPosition,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     yPosition -= 18;
   }
@@ -1221,14 +1493,14 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText(`${currencySymbol}${((financialStatement.totalDisbursements * exchangeRate) || 0).toFixed(2)}`, {
     x: 490,
     y: yPosition,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 35;
@@ -1239,7 +1511,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 12,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   yPosition -= 20;
 
@@ -1256,28 +1528,28 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText('Charges', {
     x: 300,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText('VAT', {
     x: 400,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText('Total', {
     x: 490,
     y: yPosition,
     size: 9,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 22;
@@ -1298,10 +1570,10 @@ export const generateFinancialStatementPDF = async (financialData: {
           color: lightGray
         });
         
-        currentPage.drawText('Description', { x: leftMargin, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('Charges', { x: 300, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('VAT', { x: 400, y: yPosition, size: 9, font: boldFont, color: textBlack });
-        currentPage.drawText('Total', { x: 490, y: yPosition, size: 9, font: boldFont, color: textBlack });
+        currentPage.drawText('Description', { x: leftMargin, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('Charges', { x: 300, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('VAT', { x: 400, y: yPosition, size: 9, font: boldFont, color: text });
+        currentPage.drawText('Total', { x: 490, y: yPosition, size: 9, font: boldFont, color: text });
         
         yPosition -= 22;
       }
@@ -1319,28 +1591,28 @@ export const generateFinancialStatementPDF = async (financialData: {
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${charges.toFixed(2)}`, {
         x: 300,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${vatAmount.toFixed(2)}`, {
         x: 400,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${total.toFixed(2)}`, {
         x: 490,
         y: yPosition,
         size: 8,
         font: regularFont,
-        color: textBlack
+        color: text
       });
 
       yPosition -= 14;
@@ -1353,7 +1625,7 @@ export const generateFinancialStatementPDF = async (financialData: {
             y: yPosition,
             size: 8,
             font: regularFont,
-            color: textGray
+            color: text
           });
           yPosition -= 11;
         }
@@ -1365,7 +1637,7 @@ export const generateFinancialStatementPDF = async (financialData: {
       y: yPosition,
       size: 8,
       font: regularFont,
-      color: textGray
+      color: text
     });
     yPosition -= 18;
   }
@@ -1377,14 +1649,14 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText(`${currencySymbol}${((financialStatement.totalOurCosts * exchangeRate) || 0).toFixed(2)}`, {
     x: 490,
     y: yPosition,
     size: 10,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 35;
@@ -1396,7 +1668,7 @@ export const generateFinancialStatementPDF = async (financialData: {
       y: yPosition,
       size: 12,
       font: boldFont,
-      color: textBlack
+      color: text
     });
     yPosition -= 20;
 
@@ -1407,14 +1679,14 @@ export const generateFinancialStatementPDF = async (financialData: {
         y: yPosition,
         size: 9,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       currentPage.drawText(`${currencySymbol}${((summaryItem.total * exchangeRate) || 0).toFixed(2)}`, {
         x: 490,
         y: yPosition,
         size: 9,
         font: regularFont,
-        color: textBlack
+        color: text
       });
       yPosition -= 16;
       summaryIndex++;
@@ -1426,7 +1698,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     start: { x: 300, y: yPosition },
     end: { x: width - rightMargin, y: yPosition },
     thickness: 2,
-    color: textBlack
+    color: text
   });
 
   yPosition -= 20;
@@ -1437,14 +1709,14 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 11,
     font: boldFont,
-    color: textBlack
+    color: text
   });
   currentPage.drawText(`${currencySymbol}${((financialStatement.totalAmountRequired * exchangeRate) || 0).toFixed(2)}`, {
     x: 480,
     y: yPosition,
     size: 12,
     font: boldFont,
-    color: textBlack
+    color: text
   });
 
   // Footer
@@ -1453,7 +1725,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     start: { x: leftMargin, y: yPosition },
     end: { x: width - rightMargin, y: yPosition },
     thickness: 1,
-    color: textGray
+    color: text
   });
 
   yPosition -= 15;
@@ -1462,7 +1734,7 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 7,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   yPosition -= 11;
@@ -1471,17 +1743,56 @@ export const generateFinancialStatementPDF = async (financialData: {
     y: yPosition,
     size: 7,
     font: regularFont,
-    color: textGray
+    color: text
   });
 
   // Bottom Bar
-  currentPage.drawRectangle({
-    x: 0,
-    y: 0,
-    width: width,
-    height: 40,
-    color: tealColor
-  });
+  const fsBottomBarHeight = 12;
+  const fsBottomDiagonalWidth = 40;
+  const fsBottomColorBoundary = width * 0.25;
+
+  for (let x = 0; x < width; x++) {
+    if (x < fsBottomColorBoundary - fsBottomDiagonalWidth) {
+      // Left section: solid dark gray
+      currentPage.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: fsBottomBarHeight,
+        color: lightGray
+      });
+    } else if (x >= fsBottomColorBoundary - fsBottomDiagonalWidth && x < fsBottomColorBoundary) {
+      const progress = (x - (fsBottomColorBoundary - fsBottomDiagonalWidth)) / fsBottomDiagonalWidth;
+      const currentHeight = fsBottomBarHeight * (1 - progress);
+
+      currentPage.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: currentHeight,
+        color: lightGray
+      });
+
+      if (currentHeight < fsBottomBarHeight) {
+        currentPage.drawRectangle({
+          x: x,
+          y: currentHeight,
+          width: 1,
+          height: fsBottomBarHeight - currentHeight,
+          color: tealColor
+        });
+      }
+    } else {
+      // Right section: solid teal
+      currentPage.drawRectangle({
+        x: x,
+        y: 0,
+        width: 1,
+        height: fsBottomBarHeight,
+        color: tealColor
+      });
+    }
+  }
 
   return await pdfDoc.save();
 };
