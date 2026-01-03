@@ -374,7 +374,7 @@ export const getSignupAbandonmentMetrics = async (req: Request, res: Response): 
     }
 
     return res.status(200).json({
-      growthPercentage: Math.round(growthPercentage), // Returns an integer (e.g. 12)
+      growthPercentage: Math.round(growthPercentage),
       stats: [
         { label: "Form Abandoners", value: formAbandoners },
         { label: "OAuth Drop-offs", value: oauthDropoffs },
@@ -995,142 +995,302 @@ export const getChurnPrediction = async (req: Request, res: Response): Promise<a
 
     const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
-    // 🧭 View selector
-    const view = (req.query.view as string) || "yearly"; // yearly | quarterly | monthly | weekly | 24hours
-    const currentYear = new Date().getFullYear();
+    const view = (req.query.view as string)?.toLowerCase() || "yearly";
+    const now = new Date();
+    const currentYear = now.getFullYear();
 
-    // 🎯 Compare years
-    const compareYears = req.query.compareYears
-      ? (req.query.compareYears as string).split(",").map((y) => Number(y.trim()))
-      : [currentYear - 1, currentYear];
-
-    // 🧮 Helpers for start/end range
-    const getStartOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year": return new Date(year, 0, 1, 0, 0, 0);
-        case "month": return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        case "week": return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
-        case "day": return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        default: return new Date(year, 0, 1, 0, 0, 0);
-      }
+    const percentGrowth = (prev: number, curr: number) => {
+      if (prev === 0 && curr === 0) return 0;
+      if (prev === 0) return 100;
+      return Number((((curr - prev) / prev) * 100).toFixed(2));
     };
 
-    const getEndOf = (unit: string, year: number = currentYear) => {
-      const now = new Date();
-      switch (unit) {
-        case "year": return new Date(year, 11, 31, 23, 59, 59);
-        case "month": return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        case "week": return new Date();
-        case "day": return new Date();
-        default: return new Date(year, 11, 31, 23, 59, 59);
-      }
+    const applyGrowth = (data: { x: string; y: number }[]) => {
+      let prev = 0;
+      return data.map(d => {
+        const growth = percentGrowth(prev, d.y);
+        prev = d.y;
+        return { ...d, growth };
+      });
     };
 
-    // 🧾 Define SQL date grouping expressions
-    let dateLabel = "MONTHNAME(sub.updatedAt)";
-    let groupExpr = "MONTH(sub.updatedAt)";
-    let startDate = getStartOf("year", currentYear);
-    let endDate = getEndOf("year", currentYear);
+    const calculateCombinedGrowth = (data: any[]) => {
+      const firstValue = data[0]?.y || 0;
+      const lastValue = data[data.length - 1]?.y || 0;
+      return percentGrowth(firstValue, lastValue);
+    };
 
-    switch (view.toLowerCase()) {
-      case "yearly":
-        dateLabel = "MONTHNAME(sub.updatedAt)";
-        groupExpr = "MONTH(sub.updatedAt)";
-        startDate = getStartOf("year", currentYear);
-        endDate = getEndOf("year", currentYear);
+    if (view === "24hours" || view === "daily") {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+
+      const hourlyMap = new Map<string, { total: number; churned: number }>();
+
+      // Initialize all 24 hours
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(endDate.getTime() - i * 60 * 60 * 1000);
+        const label = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          hour12: true
+        });
+        hourlyMap.set(label, { total: 0, churned: 0 });
+      }
+
+      // Get total subscriptions created in last 24 hours
+      const totalSubs = await subscriptionRepo
+        .createQueryBuilder("sub")
+        .select(["sub.createdAt"])
+        .where("sub.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+        .getMany();
+
+      for (const sub of totalSubs) {
+        const hourLabel = new Date(sub.createdAt).toLocaleTimeString(
+          "en-US",
+          { hour: "numeric", hour12: true }
+        );
+        const entry = hourlyMap.get(hourLabel);
+        if (entry) {
+          entry.total += 1;
+        }
+      }
+
+      // Get churned subscriptions in last 24 hours
+      const churnedSubs = await subscriptionRepo
+        .createQueryBuilder("sub")
+        .select(["sub.updatedAt", "sub.isDelete"])
+        .where("sub.isDelete = true")
+        .andWhere("sub.updatedAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+        .getMany();
+
+      for (const sub of churnedSubs) {
+        const hourLabel = new Date(sub.updatedAt).toLocaleTimeString(
+          "en-GB",
+          { hour: "numeric", hour12: true }
+        );
+        const entry = hourlyMap.get(hourLabel);
+        if (entry) {
+          entry.churned += 1;
+        }
+      }
+
+      const data = Array.from(hourlyMap.entries()).map(([x, counts]) => ({
+        x,
+        y: counts.total > 0 ? Number(((counts.churned / counts.total) * 100).toFixed(2)) : 0
+      }));
+
+      const dataWithGrowth = applyGrowth(data);
+      const avgChurnRate24Hours = dataWithGrowth.reduce((s, d) => s + d.y, 0) / (dataWithGrowth.length || 1);
+
+      return res.status(200).json({
+        view,
+        averageChurnRateLast24Hours: Number(avgChurnRate24Hours.toFixed(2)),
+        data: dataWithGrowth
+      });
+    }
+
+    if (view === "yearly") {
+      const years = [currentYear - 2, currentYear - 1, currentYear];
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const datasets: Record<number, any> = {};
+      const avgChurnRates: number[] = [];
+
+      for (const year of years) {
+        const start = new Date(year, 0, 1);
+        const end = new Date(year, 11, 31, 23, 59, 59);
+
+        const totalData = await subscriptionRepo
+          .createQueryBuilder("sub")
+          .select("MONTH(sub.createdAt)", "month")
+          .addSelect("COUNT(DISTINCT sub.customerId)", "totalCustomers")
+          .where("YEAR(sub.createdAt) = :year", { year })
+          .andWhere("sub.createdAt BETWEEN :start AND :end", { start, end })
+          .groupBy("MONTH(sub.createdAt)")
+          .orderBy("MONTH(sub.createdAt)", "ASC")
+          .getRawMany();
+
+        const churnedData = await subscriptionRepo
+          .createQueryBuilder("sub")
+          .select("MONTH(sub.updatedAt)", "month")
+          .addSelect("COUNT(DISTINCT sub.customerId)", "churnedCustomers")
+          .where("sub.isDelete = true")
+          .andWhere("YEAR(sub.updatedAt) = :year", { year })
+          .andWhere("sub.updatedAt BETWEEN :start AND :end", { start, end })
+          .groupBy("MONTH(sub.updatedAt)")
+          .orderBy("MONTH(sub.updatedAt)", "ASC")
+          .getRawMany();
+
+        const series = months.map((m, i) => {
+          const totalRecord = totalData.find(r => Number(r.month) === i + 1);
+          const churnRecord = churnedData.find(r => Number(r.month) === i + 1);
+          const totalCustomers = totalRecord ? Number(totalRecord.totalCustomers) : 0;
+          const churnedCustomers = churnRecord ? Number(churnRecord.churnedCustomers) : 0;
+          const churnRate = totalCustomers > 0 ? (churnedCustomers / totalCustomers) * 100 : 0;
+          return { x: m, y: Number(churnRate.toFixed(2)) };
+        });
+
+        const data = applyGrowth(series);
+        const avgChurnRate = data.reduce((s, d) => s + d.y, 0) / (data.length || 1);
+        avgChurnRates.push(avgChurnRate);
+
+        datasets[year] = {
+          label: String(year),
+          averageChurnRate: Number(avgChurnRate.toFixed(2)),
+          data,
+          growthPercentage: 0
+        };
+      }
+
+      // Calculate year-over-year growth
+      for (let i = 1; i < years.length; i++) {
+        datasets[years[i]].growthPercentage = percentGrowth(
+          avgChurnRates[i - 1],
+          avgChurnRates[i]
+        );
+      }
+
+      const overallAvgChurnRate = avgChurnRates.reduce((s, t) => s + t, 0) / (avgChurnRates.length || 1);
+      const combinedGrowthThreeYears = percentGrowth(
+        avgChurnRates[0],
+        avgChurnRates[avgChurnRates.length - 1]
+      );
+
+      return res.status(200).json({
+        view,
+        averageChurnRateLastThreeYears: Number(overallAvgChurnRate.toFixed(2)),
+        combinedGrowthPercentageThreeYears: combinedGrowthThreeYears,
+        datasets
+      });
+    }
+
+    let labels: string[] = [];
+    let groupExpr = "";
+    let dateLabel = "";
+    let startDate!: Date;
+    let endDate!: Date;
+    let periodStartDate!: Date;
+    let periodEndDate!: Date;
+
+    const currentMonth = now.getMonth();
+
+    // Calculate current week
+    const currentWeekResult = await subscriptionRepo
+      .createQueryBuilder("sub")
+      .select("WEEK(:now)", "week")
+      .setParameter("now", now)
+      .getRawOne();
+    const currentWeek = currentWeekResult?.week ? Number(currentWeekResult.week) : 1;
+
+    const currentQuarter = Math.floor(currentMonth / 3) + 1;
+
+    switch (view) {
+      case "monthly":
+        labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        groupExpr = "MONTH(sub.createdAt)";
+        dateLabel = "MONTH(sub.updatedAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        periodStartDate = new Date(currentYear, currentMonth, 1);
+        periodEndDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
         break;
 
       case "quarterly":
-        dateLabel = "CONCAT('Q', QUARTER(sub.updatedAt))";
-        groupExpr = "QUARTER(sub.updatedAt)";
-        startDate = getStartOf("year", currentYear);
-        endDate = getEndOf("year", currentYear);
-        break;
-
-      case "monthly":
-        dateLabel = "DAY(sub.updatedAt)";
-        groupExpr = "DAY(sub.updatedAt)";
-        startDate = getStartOf("month");
-        endDate = getEndOf("month");
+        labels = ["Q1","Q2","Q3","Q4"];
+        groupExpr = "QUARTER(sub.createdAt)";
+        dateLabel = "QUARTER(sub.updatedAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        periodStartDate = new Date(currentYear, (currentQuarter - 1) * 3, 1);
+        periodEndDate = new Date(currentYear, currentQuarter * 3, 0, 23, 59, 59);
         break;
 
       case "weekly":
-        dateLabel = "DAYNAME(sub.updatedAt)";
-        groupExpr = "DAYOFWEEK(sub.updatedAt)";
-        startDate = getStartOf("week");
-        endDate = getEndOf("week");
+        labels = Array.from({ length: 52 }, (_, i) => `W${i + 1}`);
+        groupExpr = "WEEK(sub.createdAt)";
+        dateLabel = "WEEK(sub.updatedAt)";
+        startDate = new Date(currentYear, 0, 1);
+        endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+        periodStartDate = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+        periodStartDate.setHours(0, 0, 0, 0);
+        periodEndDate = new Date(periodStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+        periodEndDate.setHours(23, 59, 59, 999);
         break;
 
-      case "24hours":
-        dateLabel = "HOUR(sub.updatedAt)";
-        groupExpr = "HOUR(sub.updatedAt)";
-        startDate = getStartOf("day");
-        endDate = getEndOf("day");
-        break;
+      default:
+        return res.status(400).json({ message: "Invalid view" });
     }
 
-    // 🧮 Compute churn datasets per year
-    const datasets: Record<number, { label: string; data: { x: string; y: number }[] }> = {};
+    // Get full year total subscriptions data
+    const totalData = await subscriptionRepo
+      .createQueryBuilder("sub")
+      .select(groupExpr, "bucket")
+      .addSelect("COUNT(DISTINCT sub.customerId)", "totalCustomers")
+      .where("sub.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+      .groupBy(groupExpr)
+      .orderBy(groupExpr, "ASC")
+      .getRawMany();
 
-    for (const year of compareYears) {
-      const start = getStartOf("year", year);
-      const end = getEndOf("year", year);
+    // Get full year churned subscriptions data
+    const churnedData = await subscriptionRepo
+      .createQueryBuilder("sub")
+      .select(dateLabel, "bucket")
+      .addSelect("COUNT(DISTINCT sub.customerId)", "churnedCustomers")
+      .where("sub.isDelete = true")
+      .andWhere("sub.updatedAt BETWEEN :start AND :end", { start: startDate, end: endDate })
+      .groupBy(dateLabel)
+      .orderBy(dateLabel, "ASC")
+      .getRawMany();
 
-      const totalData = await subscriptionRepo
-        .createQueryBuilder("sub")
-        .select(`${dateLabel}`, "label")
-        .addSelect("COUNT(DISTINCT sub.customerId)", "totalCustomers")
-        .where("sub.isDelete = false")
-        .andWhere("YEAR(sub.createdAt) = :year", { year })
-        .andWhere("sub.createdAt BETWEEN :start AND :end", { start, end })
-        .groupBy(groupExpr)
-        .orderBy(groupExpr, "ASC")
-        .getRawMany();
+    const series = labels.map((label, idx) => {
+      const totalRecord = totalData.find(r => Number(r.bucket) === idx + 1);
+      const churnRecord = churnedData.find(r => Number(r.bucket) === idx + 1);
+      const totalCustomers = totalRecord ? Number(totalRecord.totalCustomers) : 0;
+      const churnedCustomers = churnRecord ? Number(churnRecord.churnedCustomers) : 0;
+      const churnRate = totalCustomers > 0 ? (churnedCustomers / totalCustomers) * 100 : 0;
+      return { x: label, y: Number(churnRate.toFixed(2)) };
+    });
 
-      const churnedData = await subscriptionRepo
-        .createQueryBuilder("sub")
-        .select(`${dateLabel}`, "label")
-        .addSelect("COUNT(DISTINCT sub.customerId)", "churnedCustomers")
-        .where("sub.isDelete = true")
-        .andWhere("YEAR(sub.updatedAt) = :year", { year })
-        .andWhere("sub.updatedAt BETWEEN :start AND :end", { start, end })
-        .groupBy(groupExpr)
-        .orderBy(groupExpr, "ASC")
-        .getRawMany();
+    const seriesWithGrowth = applyGrowth(series);
+    const avgChurnRateCurrentYear = seriesWithGrowth.reduce((s, d) => s + d.y, 0) / (seriesWithGrowth.length || 1);
+    const combinedGrowth = calculateCombinedGrowth(seriesWithGrowth);
 
-      // Merge totals + churned to calculate % per group
-      const merged: { x: string; y: number }[] = [];
-      for (const t of totalData) {
-        const churnMatch = churnedData.find((c) => c.label === t.label);
-        const churnRate = t.totalCustomers
-          ? ((Number(churnMatch?.churnedCustomers || 0) / Number(t.totalCustomers)) * 100)
-          : 0;
-        merged.push({ x: t.label, y: Number(churnRate.toFixed(2)) });
-      }
+    // Get current period churn rate
+    const periodTotal = await subscriptionRepo
+      .createQueryBuilder("sub")
+      .select("COUNT(DISTINCT sub.customerId)", "count")
+      .where("sub.createdAt BETWEEN :start AND :end", { start: periodStartDate, end: periodEndDate })
+      .getRawOne();
 
-      datasets[year] = { label: year.toString(), data: merged };
+    const periodChurned = await subscriptionRepo
+      .createQueryBuilder("sub")
+      .select("COUNT(DISTINCT sub.customerId)", "count")
+      .where("sub.isDelete = true")
+      .andWhere("sub.updatedAt BETWEEN :start AND :end", { start: periodStartDate, end: periodEndDate })
+      .getRawOne();
+
+    const periodTotalCount = Number(periodTotal?.count || 0);
+    const periodChurnedCount = Number(periodChurned?.count || 0);
+    const periodChurnRate = periodTotalCount > 0 ? (periodChurnedCount / periodTotalCount) * 100 : 0;
+
+    let periodLabel = "";
+    if (view === "monthly") {
+      periodLabel = labels[currentMonth];
+    } else if (view === "quarterly") {
+      periodLabel = `Q${currentQuarter}`;
+    } else if (view === "weekly") {
+      periodLabel = `W${currentWeek}`;
     }
 
-    // 🧩 Calculate overall churn growth between last two years
-    const latestYear = Math.max(...compareYears);
-    const prevYear = latestYear - 1;
-    const avgCurrent =
-      datasets[latestYear]?.data.reduce((s, d) => s + d.y, 0) /
-      (datasets[latestYear]?.data.length || 1);
-    const avgPrev =
-      datasets[prevYear]?.data.reduce((s, d) => s + d.y, 0) /
-      (datasets[prevYear]?.data.length || 1);
-
-    const growth = avgPrev ? ((avgCurrent - avgPrev) / avgPrev) * 100 : 0;
-
-    // ✅ Response
     return res.status(200).json({
       view,
-      totalYears: compareYears,
-      growthPercentage: Number(growth.toFixed(2)),
-      datasets,
+      averageChurnRateCurrentYear: Number(avgChurnRateCurrentYear.toFixed(2)),
+      combinedGrowthPercentageCurrentYear: combinedGrowth,
+      currentPeriod: {
+        label: periodLabel,
+        churnRate: Number(periodChurnRate.toFixed(2))
+      },
+      data: seriesWithGrowth,
     });
+
   } catch (error) {
     console.error("Error in getChurnPrediction:", error);
     return res.status(500).json({
@@ -1201,145 +1361,193 @@ export const getChurnPrediction = async (req: Request, res: Response): Promise<a
  */
 export const getFunnelConversion = async (req: Request, res: Response): Promise<any> => {
   try {
-
-  
-    const view = (req.query.view as string) || "this_month"; // this_month | last_month | week | 24hours
+    const view = (req.query.view as string) || "this_month";
     const now = new Date();
 
-    // 🧭 Dynamic date ranges
     const getRange = (view: string) => {
       const start = new Date();
-      const end = new Date();
-      let prevStart, prevEnd;
+      const end = new Date(); 
+      const prevStart = new Date();
+      const prevEnd = new Date();
 
-      switch (view.toLowerCase()) {
-        case "this_month":
-          start.setDate(1);
-          start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth() + 1, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
-          break;
-
+      switch (view) {
         case "last_month":
-          start.setMonth(now.getMonth() - 1, 1);
+          start.setDate(1);
+          start.setMonth(now.getMonth() - 1);
           start.setHours(0, 0, 0, 0);
-          end.setMonth(now.getMonth(), 0);
+
+          end.setDate(0);
           end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+          prevStart.setDate(1);
+          prevStart.setMonth(now.getMonth() - 2);
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setDate(0);
+          prevEnd.setMonth(now.getMonth() - 1);
+          prevEnd.setHours(23, 59, 59, 999);
           break;
 
         case "week":
-          const today = now.getDay();
-          start.setDate(now.getDate() - today);
+          const dayOfWeek = now.getDay(); 
+          start.setDate(now.getDate() - dayOfWeek);
           start.setHours(0, 0, 0, 0);
-          end.setDate(start.getDate() + 7);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
+
+          end.setTime(now.getTime());
+
           prevStart.setDate(start.getDate() - 7);
-          prevEnd = new Date(start);
-          prevEnd.setDate(start.getDate());
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setDate(end.getDate() - 7);
+          prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
           break;
 
-        case "24hours":
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          prevStart = new Date(start);
-          prevStart.setDate(start.getDate() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setDate(end.getDate() - 1);
-          break;
-
+        case "this_month":
         default:
           start.setDate(1);
-          end.setMonth(now.getMonth() + 1, 0);
-          prevStart = new Date(start);
-          prevStart.setMonth(start.getMonth() - 1);
-          prevEnd = new Date(end);
-          prevEnd.setMonth(end.getMonth() - 1);
+          start.setHours(0, 0, 0, 0);
+
+          end.setTime(now.getTime());
+
+          prevStart.setMonth(now.getMonth() - 1, 1);
+          prevStart.setHours(0, 0, 0, 0);
+
+          prevEnd.setMonth(now.getMonth() - 1, now.getDate());
+          prevEnd.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+          break;
       }
+
       return { start, end, prevStart, prevEnd };
     };
 
     const { start, end, prevStart, prevEnd } = getRange(view);
 
-    // 🧮 Pre-Signup Stage
-    const preSignupCount = await metricRepo
-      .createQueryBuilder("m")
-      .select("SUM(m.value)", "count")
-      .where("m.category = :category", { category: "pre_signup" })
-      .andWhere("m.date BETWEEN :start AND :end", { start, end })
-      .getRawOne();
+    const [preSignupCount, signupAbandonCount, activationCount, retentionCount] = await Promise.all([
+      // Pre-Signup Stage
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "pre_signup" })
+        .andWhere("m.date BETWEEN :start AND :end", { start, end })
+        .getRawOne(),
 
-    // 🧮 Signup Abandonment Stage
-    const signupAbandonCount = await metricRepo
-      .createQueryBuilder("m")
-      .select("SUM(m.value)", "count")
-      .where("m.category = :category", { category: "signup_abandonment" })
-      .andWhere("m.date BETWEEN :start AND :end", { start, end })
-      .getRawOne();
+      // Signup Abandonment Stage
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "signup_abandonment" })
+        .andWhere("m.date BETWEEN :start AND :end", { start, end })
+        .getRawOne(),
 
-    // 🧮 Activation Stage
-    const activationCount = await metricRepo
-      .createQueryBuilder("m")
-      .select("SUM(m.value)", "count")
-      .where("m.category = :category", { category: "activation" })
-      .andWhere("m.date BETWEEN :start AND :end", { start, end })
-      .getRawOne();
+      // Activation Stage
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "activation" })
+        .andWhere("m.date BETWEEN :start AND :end", { start, end })
+        .getRawOne(),
 
-    // 🧮 Retention Stage (Active subscriptions)
-    const retentionCount = await subscriptionRepo
-      .createQueryBuilder("sub")
-      .select("COUNT(DISTINCT sub.customerId)", "count")
-      .where("sub.isDelete = false")
-      .andWhere("sub.createdAt BETWEEN :start AND :end", { start, end })
-      .getRawOne();
+      // Retention Stage
+      subscriptionRepo
+        .createQueryBuilder("sub")
+        .select("COUNT(DISTINCT sub.customerId)", "count")
+        .where("sub.isDelete = false")
+        .andWhere("sub.createdAt BETWEEN :start AND :end", { start, end })
+        .getRawOne()
+    ]);
 
-    // 🕓 Previous period (for growth calculation)
-    const prevRetentionCount = await subscriptionRepo
-      .createQueryBuilder("sub")
-      .select("COUNT(DISTINCT sub.customerId)", "count")
-      .where("sub.isDelete = false")
-      .andWhere("sub.createdAt BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
-      .getRawOne();
+    const [prevPreSignupCount, prevSignupAbandonCount, prevActivationCount, prevRetentionCount] = await Promise.all([
+      // Previous Pre-Signup
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "pre_signup" })
+        .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .getRawOne(),
 
-    // 🧩 Normalize numeric values
+      // Previous Signup Abandonment
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "signup_abandonment" })
+        .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .getRawOne(),
+
+      // Previous Activation
+      metricRepo
+        .createQueryBuilder("m")
+        .select("SUM(m.value)", "count")
+        .where("m.category = :category", { category: "activation" })
+        .andWhere("m.date BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .getRawOne(),
+
+      // Previous Retention
+      subscriptionRepo
+        .createQueryBuilder("sub")
+        .select("COUNT(DISTINCT sub.customerId)", "count")
+        .where("sub.isDelete = false")
+        .andWhere("sub.createdAt BETWEEN :start AND :end", { start: prevStart, end: prevEnd })
+        .getRawOne()
+    ]);
+
+    // Current period values
     const preSignup = Number(preSignupCount?.count || 0);
     const signupAbandonment = Number(signupAbandonCount?.count || 0);
     const activation = Number(activationCount?.count || 0);
     const retention = Number(retentionCount?.count || 0);
 
-    // ✅ Avoid division by zero
-    const safeDivide = (a: number, b: number): number => (b === 0 ? 0 : (a / b) * 100);
-
-    // 🧮 Conversion Percentages
-    const preSignupPct = 100;
-    const signupAbandonPct = safeDivide(signupAbandonment, preSignup);
-    const activationPct = safeDivide(activation, preSignup);
-    const retentionPct = safeDivide(retention, preSignup);
-
-    // 🧾 Growth Calculation
+    // Previous period values
+    const prevPreSignup = Number(prevPreSignupCount?.count || 0);
+    const prevSignupAbandonment = Number(prevSignupAbandonCount?.count || 0);
+    const prevActivation = Number(prevActivationCount?.count || 0);
     const prevRetention = Number(prevRetentionCount?.count || 0);
-    const growthPercentage = prevRetention
-      ? ((retention - prevRetention) / prevRetention) * 100
-      : 0;
 
-    // ✅ Response
+    // Calculate total current and previous for overall growth
+    const totalCurrent = preSignup + signupAbandonment + activation + retention;
+    const totalPrevious = prevPreSignup + prevSignupAbandonment + prevActivation + prevRetention;
+
+    let growthPercentage = 0;
+    if (totalPrevious > 0) {
+      growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+    } else if (totalCurrent > 0) {
+      growthPercentage = 100;
+    }
+
+    // Calculate individual stage growth percentages
+    const calculateStageGrowth = (current: number, previous: number): number => {
+      if (previous === 0 && current === 0) return 0;
+      if (previous === 0 && current > 0) return 100;
+      return ((current - previous) / previous) * 100;
+    };
+
     return res.status(200).json({
       view,
+      growthPercentage: Math.round(growthPercentage),
       stages: [
-        { label: "Pre-Signup", value: Number(preSignupPct.toFixed(2)) },
-        { label: "Signup Abandonment", value: Number(signupAbandonPct.toFixed(2)) },
-        { label: "Activation", value: Number(activationPct.toFixed(2)) },
-        { label: "Retention", value: Number(retentionPct.toFixed(2)) },
+        {
+          label: "Pre-Signup",
+          value: preSignup,
+          percentage: totalCurrent > 0 ? Number(((preSignup / totalCurrent) * 100).toFixed(2)) : 0,
+          growth: Number(calculateStageGrowth(preSignup, prevPreSignup).toFixed(2))
+        },
+        {
+          label: "Signup Abandonment",
+          value: signupAbandonment,
+          percentage: totalCurrent > 0 ? Number(((signupAbandonment / totalCurrent) * 100).toFixed(2)) : 0,
+          growth: Number(calculateStageGrowth(signupAbandonment, prevSignupAbandonment).toFixed(2))
+        },
+        {
+          label: "Activation",
+          value: activation,
+          percentage: totalCurrent > 0 ? Number(((activation / totalCurrent) * 100).toFixed(2)) : 0,
+          growth: Number(calculateStageGrowth(activation, prevActivation).toFixed(2))
+        },
+        {
+          label: "Retention",
+          value: retention,
+          percentage: totalCurrent > 0 ? Number(((retention / totalCurrent) * 100).toFixed(2)) : 0,
+          growth: Number(calculateStageGrowth(retention, prevRetention).toFixed(2))
+        },
       ],
-      growthPercentage: Number(growthPercentage.toFixed(2)),
     });
   } catch (error) {
     console.error("Error in getFunnelConversion:", error);
