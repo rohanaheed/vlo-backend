@@ -17,10 +17,10 @@ export const customerSchema = Joi.object({
   firstName: Joi.string().required().max(50),
   middleName: Joi.string().allow('').optional().max(50),
   lastName: Joi.string().required().max(50),
-  stage: Joi.string().optional().max(50),
-  churnRisk: Joi.string().optional().max(50),
+  stage: Joi.string().optional().max(50).allow(''),
+  churnRisk: Joi.string().optional().max(50).allow(''),
   businessName: Joi.string().required().max(100),
-  tradingName: Joi.string().optional().max(100),
+  tradingName: Joi.string().optional().max(100).allow(''),
   businessWebsite: Joi.string().required(),
   referralCode: Joi.number().integer().optional(),
   note: Joi.string().allow('').optional(),
@@ -28,12 +28,12 @@ export const customerSchema = Joi.object({
   businessEntity: Joi.string().required(),
   businessType: Joi.string().required(),
   businessAddress: Joi.object({
-    buildingName: Joi.string().optional(),
-    buildingNumber: Joi.string().optional(),
+    buildingName: Joi.string().optional().allow(''),
+    buildingNumber: Joi.string().optional().allow(''),
     street: Joi.string().required(),
-    town: Joi.string().optional(),
+    town: Joi.string().optional().allow(''),
     city: Joi.string().required(),
-    county: Joi.string().allow('').optional(),
+    county: Joi.string().allow('').optional().allow(''),
     country: Joi.string().required(),
     postalCode: Joi.string().required(),
   }).required(),
@@ -51,11 +51,7 @@ export const customerSchema = Joi.object({
 });
 
 export const updateCustomerSchema = Joi.object({
-  practiceArea: Joi.array().items(
-    Joi.object({
-      title: Joi.string().optional()
-    })
-  ).optional()
+  practiceArea: Joi.array().items(Joi.string()).optional()
 });
 
 export const businessTypeSchema = Joi.object({

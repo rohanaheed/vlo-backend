@@ -1445,10 +1445,12 @@ export const updateCustomer = async (
     }
 
     if (value.practiceArea && Array.isArray(value.practiceArea)) {
-      customer.practiceArea = value.practiceArea.map((practice: any) => {
-        
-        return practice.title;
-      });
+      // Remove duplicates and filter out empty values
+      const practiceAreaArray = value.practiceArea as string[];
+      const filteredPracticeArea = practiceAreaArray.filter((item: string) =>
+        item && typeof item === 'string' && item.trim() !== ''
+      );
+      customer.practiceArea = [...new Set(filteredPracticeArea)];
     }
     customer.updatedAt = new Date();
 
