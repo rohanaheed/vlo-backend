@@ -17,21 +17,21 @@ export const customerSchema = Joi.object({
   firstName: Joi.string().required().max(50),
   middleName: Joi.string().allow('').optional().max(50),
   lastName: Joi.string().required().max(50),
-  stage: Joi.string().required().max(50),
-  churnRisk: Joi.string().required().max(50),
+  stage: Joi.string().optional().max(50),
+  churnRisk: Joi.string().optional().max(50),
   businessName: Joi.string().required().max(100),
-  tradingName: Joi.string().required().max(100),
-  businessWebsite: Joi.string().optional(),
+  tradingName: Joi.string().optional().max(100),
+  businessWebsite: Joi.string().required(),
   referralCode: Joi.number().integer().optional(),
   note: Joi.string().allow('').optional(),
   businessSize: Joi.number().integer().min(1).required(),
   businessEntity: Joi.string().required(),
   businessType: Joi.string().required(),
   businessAddress: Joi.object({
-    buildingName: Joi.string().required(),
-    buildingNumber: Joi.string().required(),
+    buildingName: Joi.string().optional(),
+    buildingNumber: Joi.string().optional(),
     street: Joi.string().required(),
-    town: Joi.string().required(),
+    town: Joi.string().optional(),
     city: Joi.string().required(),
     county: Joi.string().allow('').optional(),
     country: Joi.string().required(),
@@ -43,7 +43,7 @@ export const customerSchema = Joi.object({
   email: Joi.string().email().required(),
   emailType: Joi.string().valid('Work', 'Personal').optional(),
   password: Joi.string().min(8).required(),
-  status: Joi.string().valid('Active', 'Trial', 'License Expired', 'Free', 'Inactive').default('Free'),
+  status: Joi.string().valid('Active', 'Trial', 'License Expired', 'Free', 'Inactive').default('Free').optional(),
   expirayDate: Joi.date().iso().optional(),
   lastActive: Joi.date().iso().optional(),
   isDelete: Joi.boolean().optional().default(false),
@@ -51,7 +51,11 @@ export const customerSchema = Joi.object({
 });
 
 export const updateCustomerSchema = Joi.object({
-  practiceArea: Joi.string().required(),
+  practiceArea: Joi.array().items(
+    Joi.object({
+      title: Joi.string().optional()
+    })
+  ).optional()
 });
 
 export const businessTypeSchema = Joi.object({

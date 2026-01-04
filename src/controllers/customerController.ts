@@ -1439,13 +1439,17 @@ export const updateCustomer = async (
         message: error.details[0].message
       })
     }
-    const customer = await customerRepo.findOne({ where: { id: +id, isDelete: false } });
+    const customer = await customerRepo.findOne({ where: { id: Number(id), isDelete: false } });
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
 
-    // Create customer instance
-    customer.practiceArea = value.practiceArea;
+    if (value.practiceArea && Array.isArray(value.practiceArea)) {
+      customer.practiceArea = value.practiceArea.map((practice: any) => {
+        
+        return practice.title;
+      });
+    }
     customer.updatedAt = new Date();
 
     const savedCustomer = await customerRepo.save(customer);
