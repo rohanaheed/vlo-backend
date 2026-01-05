@@ -99,12 +99,19 @@ export const createBusinessType = async (req: Request, res: Response): Promise<a
  *           type: string
  *         description: Filter business types by name (partial match)
  *       - in: query
+ *         name: orderBy
+ *         schema:
+ *           type: string
+ *           enum: [id, name]
+ *           default: id
+ *         description: Field to order by (id or name for alphabetical)
+ *       - in: query
  *         name: order
  *         schema:
  *           type: string
- *           enum: [asc, dsc, desc]
+ *           enum: [asc, desc]
  *           default: asc
- *         description: Sort order for results (asc, dsc/desc)
+ *         description: Sort order (asc or desc)
  *     responses:
  *       200:
  *         description: List of business types with pagination
@@ -167,6 +174,8 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
     const search = (req.query.search as string) || "";
     const orderParam = (req.query.order as string)?.toLowerCase() || "asc";
     const order: "ASC" | "DESC" = orderParam === "desc" || orderParam === "dsc" ? "DESC" : "ASC";
+    const orderByParam = (req.query.orderBy as string)?.toLowerCase() || "id";
+    const orderByField = orderByParam === "name" ? "bt.name" : "bt.id";
 
     const qb = businessTypeRepo.createQueryBuilder("bt")
       .where("bt.isDelete = :isDelete", { isDelete: false });
@@ -181,7 +190,7 @@ export const getAllBusinessTypes = async (req: Request, res: Response): Promise<
         .addSelect("MATCH(bt.name) AGAINST (:search IN NATURAL LANGUAGE MODE)", "relevance")
         .orderBy("relevance", "DESC");
     } else {
-      qb.orderBy("bt.id", order);
+      qb.orderBy(orderByField, order);
     }
 
     const [types, total] = await qb
