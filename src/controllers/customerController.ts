@@ -252,10 +252,7 @@ export const createCustomer = async (
   }
 };
 
-export const sendVerificationCode = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
+export const sendVerificationCode = async ( req: Request,res: Response ): Promise<any> => {
   try {
     const { error, value } = sendCodeSchema.validate(req.body);
 
@@ -266,22 +263,23 @@ export const sendVerificationCode = async (
       });
     }
     const validEmail = value.email;
-    // Check if email already exists in customer table
+
+    // Check Customer Email Exists
     const existingCustomer = await customerRepo.findOne({
       where: {
         email: validEmail,
         isDelete: false,
       },
     });
-
-    if (existingCustomer && existingCustomer.isEmailVerified) {
+    // Check Email Verified
+    if (existingCustomer?.isEmailVerified) {
       return res.status(409).json({
         success: false,
-        message: "This email is already registered as a customer",
+        message: "This email is already registered and verified",
       });
     }
 
-    // Also check if email exists in user table
+    // Check User Exist with same Email
     const existingUser = await userRepo.findOne({
       where: {
         email: validEmail,
@@ -296,23 +294,29 @@ export const sendVerificationCode = async (
       });
     }
 
-    // Generate verification code
+    // Generate OTP
     const verificationCode = generateOTP();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    const existingUnverifiedCustomer = await customerRepo.findOne({
-      where: {
-        email: validEmail,
-        isEmailVerified: false,
-      },
-    });
-    if (existingUnverifiedCustomer) {
-      // Update existing unverified customer
-      existingUnverifiedCustomer.otp = verificationCode;
-      existingUnverifiedCustomer.otpExpiry = otpExpiry;
-      await customerRepo.save(existingUnverifiedCustomer);
+    let message = "Email Verification Code Sent Successfully";
+
+    if (existingCustomer) {
+      // Resend Code after Expiry
+      if ( existingCustomer.otpExpiry && existingCustomer.otpExpiry > new Date() ) {
+        return res.status(429).json({
+          success: false,
+          message:"Please wait until the verification code expires before requesting a new one"
+        })
+      }
+
+      // Generate New
+      existingCustomer.otp = verificationCode;
+      existingCustomer.otpExpiry = otpExpiry;
+
+      await customerRepo.save(existingCustomer);
+      message = "Verification code resent successfully";
     } else {
-      // Create new temporary customer record
+      // Send Code
       const tempCustomer = new Customer();
       tempCustomer.email = validEmail;
       tempCustomer.otp = verificationCode;
@@ -322,6 +326,7 @@ export const sendVerificationCode = async (
       await customerRepo.save(tempCustomer);
     }
 
+    // Send Email
     const emailSent = await sendCustomerEmailVerificationCode(
       validEmail,
       verificationCode
@@ -329,8 +334,8 @@ export const sendVerificationCode = async (
 
     return res.status(201).json({
       success: true,
-      message: "Email Verification Code Sent Successfully",
-      emailSent: emailSent,
+      message,
+      emailSent,
     });
   } catch (error) {
     return res.status(500).json({
@@ -340,10 +345,7 @@ export const sendVerificationCode = async (
   }
 };
 
-export const verifyEmailCode = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
+export const verifyEmailCode = async ( req: Request, res: Response ): Promise<any> => {
   try {
     const { error, value } = verifyOTPSchema.validate(req.body);
 
@@ -373,7 +375,7 @@ export const verifyEmailCode = async (
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: "Customer Not Found",
+        message: "Invalid OTP",
       });
     }
     // Check OTP provided is Correct
@@ -390,9 +392,9 @@ export const verifyEmailCode = async (
         message: "Verification Code Expired",
       });
     }
-    (customer.isEmailVerified = true),
-      (customer.otp = null),
-      (customer.otpExpiry = null);
+    customer.isEmailVerified = true
+    customer.otp = null
+    customer.otpExpiry = null;
 
     await customerRepo.save(customer);
 
@@ -1478,20 +1480,18 @@ export const deleteCustomer = async (req: Request, res: Response): Promise<any> 
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
-    
 
-    customer.isDelete = true;
-    customer.deletedAt = new Date();
-    await customerRepo.save(customer);
+    // Soft-delete customer
+    await customerRepo.update(
+      { id: +id, isDelete: false },
+      { isDelete: true, deletedAt: new Date() }
+    );
 
-    const user = await userRepo.findOne({
-      where: { email: customer.email, isDelete: false },
-    });
-
-    if (user) {
-      user.isDelete = true;
-      await userRepo.save(user);
-    }
+    // Soft-delete corresponding user if exists
+    await userRepo.update(
+      { email: customer.email, isDelete: false },
+      { isDelete: true }
+    );
 
     return res.status(200).json({
       success: true,
@@ -1504,7 +1504,7 @@ export const deleteCustomer = async (req: Request, res: Response): Promise<any> 
       message: "Internal server error",
     });
   }
-}
+};
 
 /**
  * @openapi
