@@ -1354,12 +1354,7 @@ export const deleteSubcategory = async (req: Request, res: Response): Promise<an
  *           type: string
  *         type:
  *           type: string
- *           enum: [text, number, date, boolean, select]
- *         options?:
- *           type: array
- *           items:
- *             type: string
- *           description: Only for 'select' type
+ *           enum: [client_select, firm_users, full_address, website_url, date, time, phone, email, text, paragraph, rich_text, checkboxes, multiple_choice, user_select, dropdown, matter_select, header, price_currency, integer, decimal, file_upload, tags, boolean, duration, rating, signature]
  *         isDelete:
  *           type: boolean
  *         createdAt:
@@ -1392,7 +1387,7 @@ export const deleteSubcategory = async (req: Request, res: Response): Promise<an
  *                 type: string
  *               type:
  *                 type: string
- *                 enum: [text, number, date, boolean, select]
+ *                 enum: [client_select, firm_users, full_address, website_url, date, time, phone, email, text, paragraph, rich_text, checkboxes, multiple_choice, user_select, dropdown, matter_select, header, price_currency, integer, decimal, file_upload, tags, boolean, duration, rating, signature]
  *               templateKeyword:
  *                 type: string
  *               BusinessPracticeAreaId:
@@ -1606,10 +1601,9 @@ export const getCustomFieldById = async (req: Request, res: Response): Promise<a
  *                 type: string
  *               type:
  *                 type: string
- *                 enum: [text, number, date, boolean, select]
+ *                 enum: [client_select, firm_users, full_address, website_url, date, time, phone, email, text, paragraph, rich_text, checkboxes, multiple_choice, user_select, dropdown, matter_select, header, price_currency, integer, decimal, file_upload, tags, boolean, duration, rating, signature]
  *               templateKeyword:
  *                 type: string
- *                 description: Only for 'select' type
  *     responses:
  *       200:
  *         description: Custom field updated successfully

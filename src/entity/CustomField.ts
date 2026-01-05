@@ -18,7 +18,38 @@ export class CustomField {
   @Column({ default: "" })
   templateKeyword!: string;
 
-  @Column({ type: "enum", enum: ["text", "number", "date", "checkbox", "radio", "select", "textarea"], default: "text" })
+  @Column({
+    type: "enum",
+    enum: [
+      "client_select",
+      "firm_users",
+      "full_address",
+      "website_url",
+      "date",
+      "time",
+      "phone",
+      "email",
+      "text",
+      "paragraph",
+      "rich_text",
+      "checkboxes",
+      "multiple_choice",
+      "user_select",
+      "dropdown",
+      "matter_select",
+      "header",
+      "price_currency",
+      "integer",
+      "decimal",
+      "file_upload",
+      "tags",
+      "boolean",
+      "duration",
+      "rating",
+      "signature"
+    ],
+    default: "text"
+  })
   type!: string;
 
   @Column({ default: false })
