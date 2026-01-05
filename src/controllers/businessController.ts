@@ -1108,6 +1108,11 @@ export const createSubcategory = async (req: Request, res: Response): Promise<an
  *           type: string
  *         description: Search term to filter subcategories by title
  *       - in: query
+ *         name: practiceAreaId
+ *         schema:
+ *           type: integer
+ *         description: Filter subcategories by specific practice area ID
+ *       - in: query
  *         name: order
  *         schema:
  *           type: string
@@ -1142,6 +1147,7 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
 
   const search = (req.query.search as string) || "";
+  const practiceAreaId = req.query.practiceAreaId ? Number(req.query.practiceAreaId) : null;
 
   const qb = subcategoryRepo.createQueryBuilder("sc")
     .leftJoin(BusinessPracticeArea, "practiceArea", "practiceArea.id = sc.BusinessPracticeAreaId AND practiceArea.isDelete = false")
@@ -1157,6 +1163,11 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
     ])
     .where("sc.isDelete = :isDelete", { isDelete: false });
 
+  // Filter by practice area if provided
+  if (practiceAreaId) {
+    qb.andWhere("sc.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
+
   if (search.trim()) {
     qb.andWhere("sc.title LIKE :likeSearch", { likeSearch: `%${search}%` });
   }
@@ -1166,9 +1177,14 @@ export const getAllSubcategories = async (req: Request, res: Response): Promise<
     .limit(limit);
 
   const data = await qb.getRawMany();
-  const total = await subcategoryRepo.createQueryBuilder("sc")
-    .where("sc.isDelete = :isDelete", { isDelete: false })
-    .getCount();
+
+  // Count query should also respect the practiceAreaId filter
+  const countQb = subcategoryRepo.createQueryBuilder("sc")
+    .where("sc.isDelete = :isDelete", { isDelete: false });
+  if (practiceAreaId) {
+    countQb.andWhere("sc.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
+  const total = await countQb.getCount();
 
   return res.json({
     data,
