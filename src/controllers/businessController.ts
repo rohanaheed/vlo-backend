@@ -693,43 +693,66 @@ export const createPracticeArea = async (
   req: Request,
   res: Response
 ): Promise<any> => {
-  const { error, value } = businessPracticeAreaSchema.validate(req.body);
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      message: error.details[0].message,
+  try {
+    const { error, value } = businessPracticeAreaSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.details[0].message,
+      });
+    }
+
+    const { title, code } = value;
+
+    // check uniqueness by code (including soft-deleted records due to DB constraint)
+    const existingByCode = await practiceRepo.findOne({
+      where: { code },
     });
-  }
 
-  const { title, code } = value;
+    if (existingByCode) {
+      return res.status(409).json({
+        success: false,
+        message: "Practice area with this code already exists",
+      });
+    }
 
-  // check uniqueness by code
-  const existing = await practiceRepo.findOne({
-    where: {
+    // check uniqueness by title
+    const existingByTitle = await practiceRepo.findOne({
+      where: { title, isDelete: false },
+    });
+
+    if (existingByTitle) {
+      return res.status(409).json({
+        success: false,
+        message: "Practice area with this title already exists",
+      });
+    }
+
+    const area = practiceRepo.create({
+      title,
       code,
       isDelete: false,
-    },
-  });
+    });
 
-  if (existing) {
-    return res.status(409).json({
+    await practiceRepo.save(area);
+
+    return res.status(201).json({
+      success: true,
+      data: area,
+    });
+  } catch (err: any) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        success: false,
+        message: "Practice area with this code or title already exists",
+      });
+    }
+    console.error("Error creating practice area:", err);
+    return res.status(500).json({
       success: false,
-      message: "Practice area with this code already exists",
+      message: "Failed to create practice area",
     });
   }
-
-  const area = practiceRepo.create({
-    title,
-    code,
-    isDelete: false,
-  });
-
-  await practiceRepo.save(area);
-
-  return res.status(201).json({
-    success: true,
-    data: area,
-  });
 };
 
 /**
@@ -1462,6 +1485,11 @@ export const createCustomField = async (req: Request, res: Response): Promise<an
  *           type: string
  *         description: Search term for title or templateKeyword
  *       - in: query
+ *         name: practiceAreaId
+ *         schema:
+ *           type: integer
+ *         description: Filter custom fields by specific practice area ID
+ *       - in: query
  *         name: order
  *         schema:
  *           type: string
@@ -1492,6 +1520,7 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
   const search = (req.query.search as string) || "";
   let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+  const practiceAreaId = req.query.practiceAreaId && req.query.practiceAreaId !== '' ? Number(req.query.practiceAreaId) : null;
 
   const qb = customFieldRepo.createQueryBuilder("cf")
     .leftJoin(CustomfieldGroup, "fieldGroup", "fieldGroup.id = cf.CustomfieldGroupId AND fieldGroup.isDelete = false")
@@ -1511,6 +1540,11 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
     ])
     .where("cf.isDelete = :isDelete", { isDelete: false });
 
+  // Filter by practice area if provided
+  if (practiceAreaId) {
+    qb.andWhere("cf.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
+
   if (search) {
     qb.andWhere(
       "(cf.title LIKE :search OR cf.templateKeyword LIKE :search)",
@@ -1523,9 +1557,14 @@ export const getAllCustomFields = async (req: Request, res: Response): Promise<a
     .limit(limit);
 
   const data = await qb.getRawMany();
-  const total = await customFieldRepo.createQueryBuilder("cf")
-    .where("cf.isDelete = :isDelete", { isDelete: false })
-    .getCount();
+
+  // Count query should also respect the practiceAreaId filter
+  const countQb = customFieldRepo.createQueryBuilder("cf")
+    .where("cf.isDelete = :isDelete", { isDelete: false });
+  if (practiceAreaId) {
+    countQb.andWhere("cf.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
+  const total = await countQb.getCount();
 
   return res.json({ data, total, page, limit });
 };
@@ -1805,6 +1844,11 @@ export const createCustomFieldGroup = async (req: Request, res: Response): Promi
  *           type: string
  *         description: Search term for title or linkedTo
  *       - in: query
+ *         name: practiceAreaId
+ *         schema:
+ *           type: integer
+ *         description: Filter custom field groups by specific practice area ID
+ *       - in: query
  *         name: order
  *         schema:
  *           type: string
@@ -1836,6 +1880,7 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
   const search = (req.query.search as string) || "";
   let orderParam = (req.query.order as string)?.toLowerCase() || "asc";
   let order: "ASC" | "DESC" = orderParam === "dsc" || orderParam === "desc" ? "DESC" : "ASC";
+  const practiceAreaId = req.query.practiceAreaId && req.query.practiceAreaId !== '' ? Number(req.query.practiceAreaId) : null;
 
   const qb = customFieldGroupRepo.createQueryBuilder("group")
     .leftJoin(Subcategory, "subcategory", "subcategory.id = group.subcategoryId AND subcategory.isDelete = false")
@@ -1849,9 +1894,15 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
       "group.createdAt as createdAt",
       "group.updatedAt as updatedAt",
       "subcategory.title as subcategoryName",
+      "subcategory.BusinessPracticeAreaId as practiceAreaId",
       "practiceArea.title as practiceAreaName"
     ])
     .where("group.isDelete = :isDelete", { isDelete: false });
+
+  // Filter by practice area if provided
+  if (practiceAreaId) {
+    qb.andWhere("subcategory.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
 
   if (search) {
     qb.andWhere(
@@ -1865,9 +1916,15 @@ export const getAllCustomFieldGroups = async (req: Request, res: Response): Prom
     .limit(limit);
 
   const data = await qb.getRawMany();
-  const totalResult = await customFieldGroupRepo.createQueryBuilder("group")
-    .where("group.isDelete = :isDelete", { isDelete: false })
-    .getCount();
+
+  // Count query should also respect the practiceAreaId filter
+  const countQb = customFieldGroupRepo.createQueryBuilder("group")
+    .leftJoin(Subcategory, "subcategory", "subcategory.id = group.subcategoryId AND subcategory.isDelete = false")
+    .where("group.isDelete = :isDelete", { isDelete: false });
+  if (practiceAreaId) {
+    countQb.andWhere("subcategory.BusinessPracticeAreaId = :practiceAreaId", { practiceAreaId });
+  }
+  const totalResult = await countQb.getCount();
 
   return res.json({ data, total: totalResult, page, limit });
 };
