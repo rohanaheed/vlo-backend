@@ -45,6 +45,7 @@ export const customerSchema = Joi.object({
   password: Joi.string().min(8).required(),
   status: Joi.string().valid('Active', 'Trial', 'License Expired', 'Free', 'Inactive').default('Free').optional(),
   expirayDate: Joi.date().iso().optional(),
+  practiceArea: Joi.array().items(Joi.string()).optional(),
   lastActive: Joi.date().iso().optional(),
   isDelete: Joi.boolean().optional().default(false),
   sendEmail: Joi.boolean().optional().default(false),

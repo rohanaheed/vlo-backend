@@ -157,6 +157,15 @@ export const createCustomer = async (
     customer.updatedAt = new Date();
     customer.lastActive = new Date();
 
+    if (value.practiceArea && Array.isArray(value.practiceArea)) {
+      // Remove duplicates and filter out empty values
+      const practiceAreaArray = value.practiceArea as string[];
+      const filteredPracticeArea = practiceAreaArray.filter((item: string) =>
+        item && typeof item === 'string' && item.trim() !== ''
+      );
+      customer.practiceArea = [...new Set(filteredPracticeArea)];
+    }
+    // Currency based on the Customer Country
     const country = value.businessAddress.country
     const currency = await currencyRepo.findOne({
       where: { country : country, isDelete : false }
