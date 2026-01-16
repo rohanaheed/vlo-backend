@@ -32,6 +32,57 @@ const subscriptionRepo = AppDataSource.getRepository(Subscription);
 const packageRepo = AppDataSource.getRepository(Package);
 const customerPackageRepo = AppDataSource.getRepository(CustomerPackage)
 
+// Helper Function To Reset Records For Deleted Customer On Retieval
+export const resetCustomerAfterDelete = (customer: Customer) => {
+  // Identity & ownership
+  customer.createdByUserId = 0;
+  customer.title = "";
+  customer.firstName = "";
+  customer.middleName = "";
+  customer.lastName = "";
+  customer.businessName = "";
+  customer.tradingName = "";
+  customer.note = "";
+
+  // Business details
+  customer.businessSize = 0;
+  customer.businessEntity = "";
+  customer.businessType = "";
+  customer.businessWebsite = "";
+  customer.businessAddress = null as any;
+  customer.referralCode = 0;
+
+  // Contact
+  customer.phoneNumber = "";
+  customer.phoneType = "";
+  customer.countryCode = "";
+  customer.emailType = "";
+
+  // Auth / verification
+  customer.password = "";
+  customer.isEmailVerified = false;
+  customer.isPhoneVerified = false;
+  customer.otp = null;
+  customer.otpExpiry = null;
+
+  // Customer lifecycle
+  customer.stage = "";
+  customer.churnRisk = "";
+  customer.practiceArea = [];
+  customer.status = "Free";
+
+  // Billing / system
+  customer.currencyId = 0;
+  customer.packageId = 0;
+  customer.stripeCustomerId = null;
+
+  // Activity & deletion metadata
+  customer.lastActive = new Date();
+  customer.reasonForDeletion = "";
+  customer.isDelete = false;
+};
+
+
 /**
  * @swagger
  * /api/customers:
@@ -83,7 +134,7 @@ export const createCustomer = async (
     if (!existingCustomer) {
       return res.status(400).json({
         success: false,
-        message: "Please verify your email before creating a customer.",
+        message: "Customer Not Found.",
       });
     }
 
@@ -261,7 +312,10 @@ export const createCustomer = async (
   }
 };
 
-export const sendVerificationCode = async ( req: Request,res: Response ): Promise<any> => {
+export const sendVerificationCode = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   try {
     const { error, value } = sendCodeSchema.validate(req.body);
 
@@ -271,31 +325,28 @@ export const sendVerificationCode = async ( req: Request,res: Response ): Promis
         message: error.details[0].message,
       });
     }
-    const validEmail = value.email;
 
-    // Check Customer Email Exists
-    const existingCustomer = await customerRepo.findOne({
-      where: {
-        email: validEmail,
-        isDelete: false,
-      },
+    const email = value.email.trim().toLowerCase();
+
+    // Active & deleted customer lookups
+    const activeCustomer = await customerRepo.findOne({
+      where: { email, isDelete: false },
     });
-    // Check Email Verified
-    if (existingCustomer?.isEmailVerified) {
+
+    const deletedCustomer = await customerRepo.findOne({
+      where: { email, isDelete: true },
+    });
+
+    // Block already verified email
+    if (activeCustomer?.isEmailVerified) {
       return res.status(409).json({
         success: false,
         message: "This email is already registered and verified",
       });
     }
 
-    // Check User Exist with same Email
-    const existingUser = await userRepo.findOne({
-      where: {
-        email: validEmail,
-        isDelete: false,
-      },
-    });
-
+    // Block if email belongs to system user
+    const existingUser = await userRepo.findOne({ where: { email, isDelete: false } });
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -303,45 +354,51 @@ export const sendVerificationCode = async ( req: Request,res: Response ): Promis
       });
     }
 
-    // Generate OTP
-    const verificationCode = generateOTP();
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
-    let message = "Email Verification Code Sent Successfully";
+    let customer: Customer;
+    let message = "Verification code sent successfully";
 
-    if (existingCustomer) {
-      // Resend Code after Expiry
-      if ( existingCustomer.otpExpiry && existingCustomer.otpExpiry > new Date() ) {
+    // Existing active customer (resend)
+    if (activeCustomer) {
+      if (activeCustomer.otpExpiry && activeCustomer.otpExpiry > new Date()) {
         return res.status(429).json({
           success: false,
-          message:"Please wait until the verification code expires before requesting a new one"
-        })
+          message:
+            "Please wait until the verification code expires before requesting a new one",
+        });
       }
 
-      // Generate New
-      existingCustomer.otp = verificationCode;
-      existingCustomer.otpExpiry = otpExpiry;
-
-      await customerRepo.save(existingCustomer);
+      activeCustomer.otp = otp;
+      activeCustomer.otpExpiry = otpExpiry;
+      customer = activeCustomer;
       message = "Verification code resent successfully";
-    } else {
-      // Send Code
-      const tempCustomer = new Customer();
-      tempCustomer.email = validEmail;
-      tempCustomer.otp = verificationCode;
-      tempCustomer.otpExpiry = otpExpiry;
-      tempCustomer.isEmailVerified = false;
 
-      await customerRepo.save(tempCustomer);
+    // Deleted customer → FULL RESET
+    } else if (deletedCustomer) {
+      resetCustomerAfterDelete(deletedCustomer);
+      deletedCustomer.otp = otp;
+      deletedCustomer.otpExpiry = otpExpiry;
+      customer = deletedCustomer;
+
+    // Brand-new customer
+    } else {
+      customer = customerRepo.create({
+        email,
+        otp,
+        otpExpiry,
+        isEmailVerified: false,
+        isPhoneVerified: false,
+        isDelete: false,
+      });
     }
 
-    // Send Email
-    const emailSent = await sendCustomerEmailVerificationCode(
-      validEmail,
-      verificationCode
-    );
+    await customerRepo.save(customer);
 
-    return res.status(201).json({
+    const emailSent = await sendCustomerEmailVerificationCode(email, otp);
+
+    return res.status(200).json({
       success: true,
       message,
       emailSent,
@@ -384,7 +441,7 @@ export const verifyEmailCode = async ( req: Request, res: Response ): Promise<an
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: "Invalid OTP",
+        message: "Customer Not Found",
       });
     }
     // Check OTP provided is Correct
@@ -424,32 +481,84 @@ export const checkCustomerExist = async (
   res: Response
 ): Promise<any> => {
   try {
-    const { email } = req.body;
-    const customerExist = await customerRepo.findOne({
+    const email = req.body.email?.trim().toLowerCase();
+
+    const activeCustomer = await customerRepo.findOne({
       where: {
-        email: email,
+        email,
         isDelete: false,
       },
     });
+
     const userExist = await userRepo.findOne({
-      where: {
-        email: email,
-        isDelete: false,
+      where: { 
+        email,
+        isDelete: false
       },
     });
-    if (customerExist || userExist) {
+
+    if (activeCustomer || userExist) {
       return res.status(200).json({
         success: false,
         exists: true,
-        message: "This Email is already Registered in the system",
-      });
-    } else {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        message: "Email is available",
+        message: "This email is already registered in the system",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      exists: false,
+      message: "Email is available",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const isCustomerVerified = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
+  try {
+    const email = req.body.email?.trim().toLowerCase();
+    const phoneNumber = req.body.phoneNumber?.trim();
+
+    // At least one identifier required
+    if (!email && !phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or phone number is required",
+      });
+    }
+
+    const customer = await customerRepo.findOne({
+      where: [
+        email
+          ? { email, isDelete: false }
+          : undefined,
+        phoneNumber
+          ? { phoneNumber, isDelete: false }
+          : undefined,
+      ].filter(Boolean) as any, // removes undefined conditions
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      verificationStatus: {
+        emailVerified: customer.isEmailVerified,
+        phoneVerified: customer.isPhoneVerified,
+      },
+    });
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -497,7 +606,7 @@ export const selectCustomerPackage = async (
         existingCustomerPackage.addOns = [];
       }
       // If package not changed, keep existing add-ons
-      
+
       await customerPackageRepo.save(existingCustomerPackage);
     } else {
       // Create new record if no package exists
@@ -558,19 +667,15 @@ export const selectCustomerAddOns = async (
       return res.status(404).json({ success: false, message: "Package not found" });
     }
 
-    // Validate and build new add-ons list
+    // Validate and build new add-ons list (completely replaces existing add-ons)
     const validAddOns = [];
-    const selectedModuleFeatures = new Set();
 
     for (const addOn of selectedAddOns) {
       const match = pkg.extraAddOn.find(
         a => a.module === addOn.module && a.feature === addOn.feature
       );
-      
-      if (!match) continue;
 
-      const key = `${match.module}:${match.feature}`;
-      selectedModuleFeatures.add(key);
+      if (!match) continue;
 
       validAddOns.push({
         module: match.module,
@@ -578,32 +683,20 @@ export const selectCustomerAddOns = async (
         monthlyPrice: match.monthlyPrice,
         yearlyPrice: match.yearlyPrice,
         discount: match.discount,
-        description: match.description
+        description: match.description,
+        stripeProductId: match.stripeProductId || null,
+        stripeMonthlyPriceId: match.stripeMonthlyPriceId || null,
+        stripeYearlyPriceId: match.stripeYearlyPriceId || null,
+        stripeCouponId: match.stripeCouponId || null,
       });
     }
 
-    // Keep existing add-ons that are still in the package and not being replaced
-    const existingAddOns = customerPackage.addOns || [];
-    for (const existingAddOn of existingAddOns) {
-      const key = `${existingAddOn.module}:${existingAddOn.feature}`;
-      
-      // Only keep if not in new selection and still valid in package
-      if (!selectedModuleFeatures.has(key)) {
-        const stillValid = pkg.extraAddOn.find(
-          a => a.module === existingAddOn.module && a.feature === existingAddOn.feature
-        );
-        
-        if (stillValid) {
-          validAddOns.push(existingAddOn);
-        }
-      }
-    }
-
-    // Remove duplicates 
+    // Remove duplicates
     const uniqueAddOns = Array.from(
       new Map(validAddOns.map(item => [`${item.module}:${item.feature}`, item])).values()
     );
 
+    // Replace all existing add-ons with the new selection
     customerPackage.addOns = uniqueAddOns;
     await customerPackageRepo.save(customerPackage);
 
@@ -1437,37 +1530,151 @@ export const getDeletedCustomers = async (
  *       500:
  *         description: Internal server error
  */
+
 export const updateCustomer = async (
   req: Request,
   res: Response
 ): Promise<any> => {
   try {
     const { id } = req.params;
-    const {error,value} = updateCustomerSchema.validate(req.body)
-    if(error){
+
+    const { error, value } = updateCustomerSchema.validate(req.body, {
+      stripUnknown: true,
+    });
+
+    if (error) {
       return res.status(400).json({
         success: false,
-        message: error.details[0].message
-      })
-    }
-    const customer = await customerRepo.findOne({ where: { id: Number(id), isDelete: false } });
-    if (!customer) {
-      return res.status(404).json({ message: "Customer not found" });
+        message: error.details[0].message,
+      });
     }
 
-    if (value.practiceArea && Array.isArray(value.practiceArea)) {
-      // Remove duplicates and filter out empty values
-      const practiceAreaArray = value.practiceArea as string[];
-      const filteredPracticeArea = practiceAreaArray.filter((item: string) =>
-        item && typeof item === 'string' && item.trim() !== ''
-      );
-      customer.practiceArea = [...new Set(filteredPracticeArea)];
+    const customer = await customerRepo.findOne({
+      where: { id: Number(id), isDelete: false },
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
     }
-    customer.updatedAt = new Date();
+
+    /* =========================
+       EMAIL UPDATE (UNIQUE)
+    ========================= */
+    if (value.email && value.email !== customer.email) {
+      const newEmail = value.email.trim().toLowerCase();
+
+      const emailInUse = await customerRepo.findOne({
+        where: { email: newEmail, isDelete: false },
+      });
+
+      if (emailInUse) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already in use",
+        });
+      }
+
+      const userExists = await userRepo.findOne({
+        where: { email: newEmail },
+      });
+
+      if (userExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already registered in the system",
+        });
+      }
+
+      customer.email = newEmail;
+      customer.isEmailVerified = false;
+      customer.otp = null;
+      customer.otpExpiry = null;
+
+      delete value.email;
+    }
+
+    /* =========================
+       PHONE UPDATE (UNIQUE)
+    ========================= */
+    if (value.phoneNumber && value.phoneNumber !== customer.phoneNumber) {
+      const newPhone = value.phoneNumber.trim();
+
+      const phoneInUse = await customerRepo.findOne({
+        where: {
+          phoneNumber: newPhone,
+          isDelete: false,
+        },
+      });
+
+      if (phoneInUse) {
+        return res.status(409).json({
+          success: false,
+          message: "Phone number is already in use",
+        });
+      }
+
+      customer.phoneNumber = newPhone;
+      customer.isPhoneVerified = false;
+
+      delete value.phoneNumber;
+    }
+
+    /* =========================
+       PASSWORD UPDATE (HASHED)
+    ========================= */
+    if (value.password) {
+      customer.password = await bcrypt.hash(value.password, 10);
+      delete value.password;
+    }
+
+    /* =========================
+       PRACTICE AREA CLEANUP
+    ========================= */
+    if (value.practiceArea && Array.isArray(value.practiceArea)) {
+    const practiceArea: string[] = value.practiceArea
+      .filter((v: string) => typeof v === "string" && v.trim() !== "")
+      .map((v: string) => v.trim());
+
+    customer.practiceArea = [...new Set(practiceArea)]; // Remove duplicates
+    delete value.practiceArea;
+   }
+
+
+    /* =========================
+   COUNTRY → CURRENCY UPDATE
+========================= */
+if (value.businessAddress?.country) {
+  const oldCountry = customer.businessAddress?.country;
+  const newCountry = value.businessAddress.country;
+
+  if (newCountry !== oldCountry) {
+    const currency = await currencyRepo.findOne({
+      where: { country: newCountry, isDelete: false },
+    });
+
+    if (!currency) {
+      return res.status(400).json({
+        success: false,
+        message: `No currency found for country: ${newCountry}`,
+      });
+    }
+
+    customer.currencyId = currency.id;
+  }
+}
+
+
+    /* =========================
+       APPLY REMAINING FIELDS
+    ========================= */
+    Object.assign(customer, value);
 
     const savedCustomer = await customerRepo.save(customer);
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       data: savedCustomer,
       message: "Customer updated successfully",
