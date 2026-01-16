@@ -74,7 +74,6 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     // Calculate package in base currency
     const packagePrice = pkg.billingCycle === "Annual" ? Number(pkg.priceYearly ?? 0) : Number(pkg.priceMonthly ?? 0);
     const packageDiscountPercent = pkg.discount ?? 0;
-    const packageDiscountAmount = (packagePrice * packageDiscountPercent) / 100;
     const packageSubTotal = packagePrice;
 
     // Add package to invoice items
@@ -83,7 +82,6 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
       quantity: 1,
       amount: Number(packagePrice.toFixed(2)),
       subTotal: Number(packageSubTotal.toFixed(2)),
-      discount: Number(packageDiscountAmount.toFixed(2)),
       discountType: `${packageDiscountPercent}%`,
       vatRate: "",
       vatType: ""
@@ -91,13 +89,11 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
     // Calculate add-ons in Base currency
     let addOnsSubTotal = 0;
-    let addOnsDiscount = 0;
     let totalDiscountPercent = packageDiscountPercent;
 
     for (const addOn of addOns) {
       const addOnPrice = pkg.billingCycle === "Annual" ? Number(addOn.yearlyPrice ?? 0) : Number(addOn.monthlyPrice ?? 0);
       const addOnDiscountPercent = addOn.discount ?? 0;
-      const addOnDiscountAmount = (addOnPrice * addOnDiscountPercent) / 100;
       const addOnItemSubTotal = addOnPrice;
 
       invoiceItems.push({
@@ -105,20 +101,18 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         quantity: 1,
         amount: Number(addOnPrice.toFixed(2)),
         subTotal: Number(addOnItemSubTotal.toFixed(2)),
-        discount: Number(addOnDiscountAmount.toFixed(2)),
         discountType: `${addOnDiscountPercent}%`,
         vatRate: "",
         vatType: ""
       });
 
       addOnsSubTotal += addOnItemSubTotal;
-      addOnsDiscount += addOnDiscountAmount;
       totalDiscountPercent += addOnDiscountPercent;
     }
 
     // Calculate totals
     const subTotal = packageSubTotal + addOnsSubTotal;
-    const discount = packageDiscountAmount + addOnsDiscount;
+    const discount = (subTotal * totalDiscountPercent) / 100;
     const total = subTotal - discount;
     const invoiceDiscountType = `${totalDiscountPercent}%`;
     

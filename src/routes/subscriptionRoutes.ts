@@ -5,7 +5,8 @@ import {
   deleteSubscription,
   getAllSubscriptions,
   getSubscriptionById,
-  updateAutoRenew
+  updateAutoRenew,
+  cancelSubscription
 } from "../controllers/subscriptionController";
 import { validateRequest } from "../middleware/validateRequest";
 import { createSubscriptionSchema, updateSubscriptionSchema } from "../utils/validators/inputValidator";
@@ -41,5 +42,8 @@ router.delete("/:id", authorize(["super_admin"]), asyncHandler(deleteSubscriptio
 
 // Enable/disable auto-renew for subscription
 router.patch("/:id/auto-renew", authorize(["super_admin"]), asyncHandler(updateAutoRenew));
+
+// Cancel subscription (with option to cancel at period end or immediately)
+router.post("/:id/cancel", authorize(["super_admin"]), asyncHandler(cancelSubscription));
 
 export default router;

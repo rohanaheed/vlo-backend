@@ -32,6 +32,9 @@ export class Subscription {
   @Column({ default: false })
   autoRenew!: boolean;
 
+  @Column({ nullable: true })
+  subscriptionId?: string;
+
   @Column({ default: false })
   isDelete!: boolean;
 

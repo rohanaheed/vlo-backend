@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import Stripe from "stripe";
 import { stripe } from "../config/stripe";
 import { AppDataSource } from "../config/db";
 import { PaymentMethod } from "../entity/PaymentMethod";
@@ -8,8 +9,14 @@ import { CustomerPackage } from "../entity/CustomerPackage";
 import { Package } from "../entity/Package";
 import { Currency } from "../entity/Currency";
 import { Customer } from "../entity/Customer";
-import { Subscription } from "../entity/Subscription";
 import * as crypto from 'crypto';
+import {
+  getOrCreateStripeCustomer,
+  createStripeInvoiceItems,
+  createStripeInvoice,
+  finalizeStripeInvoice,
+} from "../utils/stripUtils";
+import { paymentNowSchema } from "../utils/validators/inputValidator";
 
 const orderRepo = AppDataSource.getRepository(Order);
 const invoiceRepo = AppDataSource.getRepository(Invoice);
@@ -18,39 +25,9 @@ const packageRepo = AppDataSource.getRepository(Package);
 const currencyRepo = AppDataSource.getRepository(Currency);
 const paymentRepo = AppDataSource.getRepository(PaymentMethod);
 const customerRepo = AppDataSource.getRepository(Customer);
-const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
 const algorithm = 'aes-256-cbc';
 const secretKey = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || '32-char-secret-key!!').digest();
-
-// Convert Invoice to Customer Currency
-const convertInvoiceToCustomerCurrency = (invoice: any, exchangeRate: number): any => {
-  return {
-    ...invoice,
-    subTotal: Number((invoice.subTotal * exchangeRate).toFixed(2)),
-    vat: Number((invoice.vat * exchangeRate).toFixed(2)),
-    discountValue: Number((invoice.discountValue * exchangeRate).toFixed(2)),
-    total: Number((invoice.total * exchangeRate).toFixed(2)),
-    outstandingBalance: Number((invoice.outstandingBalance * exchangeRate).toFixed(2)),
-    amount: Number((invoice.amount * exchangeRate).toFixed(2)),
-    items: invoice.items?.map((item: any) => ({
-      ...item,
-      amount: Number(((item.amount || 0) * exchangeRate).toFixed(2)),
-      subTotal: Number(((item.subTotal || 0) * exchangeRate).toFixed(2)),
-      discount: Number(((item.discount || 0) * exchangeRate).toFixed(2))
-    })) || []
-  };
-};
-
-// Convert Order to Customer Currency
-const convertOrderToCustomerCurrency = (order: any, exchangeRate: number): any => {
-  return {
-    ...order,
-    subTotal: Number((order.subTotal * exchangeRate).toFixed(2)),
-    discount: Number((order.discount * exchangeRate).toFixed(2)),
-    total: Number((order.total * exchangeRate).toFixed(2))
-  };
-};
 
 const decrypt = (encryptedText: string) => {
   const [ivHex, encrypted] = encryptedText.split(':');
@@ -133,53 +110,38 @@ function convertCountryToISO(countryName: string): string {
   if (isoCode) {
     return isoCode;
   }
-  
-  console.warn(`Country "${countryName}" not found in map, defaulting to UK`);
-  return 'GB';
+
+  throw new Error(`Invalid country: "${countryName}". Please provide a valid country name or ISO code.`);
 }
 
 
 export const paymentNow = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { customerId, orderId, invoiceId, paymentMethodId, autoRenew = true } = req.body;
-
-    console.log('Payment request received:', { customerId, orderId, invoiceId });
-
-    // Validation
-    if (!customerId || !orderId || !invoiceId) {
+    // Validate
+    const { error, value } = paymentNowSchema.validate(req.body);
+    if (error) {
       return res.status(400).json({
         success: false,
-        message: "Required fields: customerId, orderId, invoiceId"
+        message: error.details[0].message
       });
     }
+
+    const { customerId, orderId, invoiceId, paymentMethodId, autoRenew } = value;
 
     // Get payment method
-    let paymentMethod: PaymentMethod | null = null;
-
-    if (paymentMethodId) {
-      paymentMethod = await paymentRepo.findOne({ 
-        where: { 
-          id: paymentMethodId, 
-          customerId: String(customerId),
-          isDelete: false,
-          isActive: true 
-        } 
-      });
-    } else {
-      paymentMethod = await paymentRepo.findOne({ 
-        where: { 
-          customerId: String(customerId), 
-          isDefault: true, 
-          isDelete: false,
-          isActive: true 
-        } 
-      });
-    }
+    const paymentMethod = await paymentRepo.findOne({
+      where: {
+        id: paymentMethodId,
+        customerId: String(customerId),
+        isDelete: false,
+        isActive: true
+      }
+    });
 
     if (!paymentMethod) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "No active payment method found" 
+      return res.status(404).json({
+        success: false,
+        message: "No active payment method found"
       });
     }
 
@@ -190,9 +152,12 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Get order
-    const order = await orderRepo.findOne({ where: { id: orderId, status:"pending", isDelete: false } });
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found or order already paid" });
+    let order: Order | null = null;
+    if (orderId) {
+      order = await orderRepo.findOne({ where: { id: orderId, status: "pending", isDelete: false } });
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found or order already paid" });
+      }
     }
 
     // Get customer
@@ -226,29 +191,17 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
       return res.status(404).json({ success: false, message: "Currency not found" });
     }
 
-    // Convert invoice and order
-    const exchangeRate = Number(currency.exchangeRate || 1);
-    const convertedInvoice = convertInvoiceToCustomerCurrency(invoice, exchangeRate);
-    const convertedOrder = convertOrderToCustomerCurrency(order, exchangeRate);
-
-    // Validate amount
-    if (convertedInvoice.amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid invoice amount"
-      });
+    // Update order status
+    if (order) {
+      await orderRepo.update({ id: orderId }, { status: "processing" });
     }
 
-    // Update order status
-    await orderRepo.update({ id: orderId }, { status: "processing" });
-    console.log('Order status updated to processing');
-
-    // Process payment based on gateway
+    // Process payment based on payment method
     if (paymentMethod.paymentMethod.toLowerCase() === "stripe") {
       const result = await processStripePayment(
         paymentMethod,
-        convertedInvoice,
-        convertedOrder,
+        invoice,
+        order,
         customer,
         customerPackage,
         currency,
@@ -256,7 +209,6 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
         autoRenew
       );
 
-      console.log('Payment intent created:', result.paymentIntentId);
       return res.status(200).json(result);
     } 
     else if (paymentMethod.paymentMethod.toLowerCase() === "paypal") {
@@ -274,32 +226,39 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
 
   } catch (err: any) {
     console.error('Payment processing error:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: err.message || "Payment processing failed" 
+    return res.status(500).json({
+      success: false,
+      message: "Payment processing failed. Please try again or contact support."
     });
   }
 };
 
 async function processStripePayment(
   paymentMethod: PaymentMethod,
-  invoice: any,
-  order: any,
-  customer: any,
-  customerPackage: any,
-  currency: any,
-  pkg: any,
+  invoice: Invoice,
+  order: Order | null,
+  customer: Customer,
+  customerPackage: CustomerPackage,
+  currency: Currency,
+  pkg: Package,
   autoRenew: boolean
-): Promise<any> {
+): Promise<{
+  success: boolean;
+  message: string;
+  clientSecret?: string;
+  paymentIntentId?: string;
+  status?: string;
+  requiresAction?: boolean;
+  nextActionUrl?: string;
+  error?: string;
+  errorCode?: string;
+  errorType?: string;
+}> {
   try {
-    console.log('Starting Stripe payment process...');
-    
     // Decrypt card details
     const cardNumber = decrypt(paymentMethod.cardNumber);
     const cardExpiryDate = decrypt(paymentMethod.cardExpiryDate);
     const cardCvv = decrypt(paymentMethod.cardCvv);
-
-    console.log('Card details decrypted');
 
     const expiryMatch = cardExpiryDate.match(/(\d{2})\/?(\d{2})/);
     if (!expiryMatch) {
@@ -314,36 +273,28 @@ async function processStripePayment(
     }
 
     // Convert country to ISO code
-    const countryCode = convertCountryToISO(paymentMethod.country || 'GB');
-    console.log(`Country code: ${countryCode}`);
+    if (!paymentMethod.country) {
+      throw new Error("Payment method country is required");
+    }
+    const countryCode = convertCountryToISO(paymentMethod.country);
 
-    // Create Stripe payment method
-    let stripePaymentMethod;
-    
+    // Create Stripe payment method using customers card details
+    let stripePaymentMethod: Stripe.PaymentMethod;
+
     // Check Test mode
     const isTestMode = process.env.STRIPE_SECRET_KEY?.includes('test');
-    
+
     if (isTestMode) {
-      console.log('Test mode detected - Using Stripe test payment methods');
-      
       const testTokens: Record<string, string> = {
-        '4242424242424242': 'pm_card_visa',  
+        '4242424242424242': 'pm_card_visa',
         '5555555555554444': 'pm_card_mastercard',
-        '378282246310005': 'pm_card_amex', 
-        '4000000000000002': 'pm_card_chargeDeclined', 
+        '378282246310005': 'pm_card_amex',
+        '4000000000000002': 'pm_card_chargeDeclined',
         '4000000000009995': 'pm_card_visa_debit',
       };
 
-      const testToken = testTokens[cardNumber];
-      if (testToken) {
-        stripePaymentMethod = await stripe.paymentMethods.retrieve(testToken);
-        console.log(`Using test payment method: ${testToken}`);
-      } else {
-        // Fallback to default test card
-        console.log(`Unknown test card ${cardNumber}, using default pm_card_visa`);
-        stripePaymentMethod = await stripe.paymentMethods.retrieve('pm_card_visa');
-      }
-      
+      const testToken = testTokens[cardNumber] || 'pm_card_visa';
+      stripePaymentMethod = await stripe.paymentMethods.retrieve(testToken);
     } else {
       try {
         stripePaymentMethod = await stripe.paymentMethods.create({
@@ -363,10 +314,7 @@ async function processStripePayment(
             },
           },
         });
-        console.log(`Payment method created: ${stripePaymentMethod.id}`);
       } catch (error: any) {
-        console.error('Failed to create payment method:', error.message);
-        
         if (error.code === 'card_declined') {
           throw new Error('Card was declined. Please use a different payment method.');
         } else if (error.code === 'incorrect_number') {
@@ -386,54 +334,27 @@ async function processStripePayment(
     }
 
     // Create or get Stripe customer
-    let stripeCustomer;
-    try {
-      // Try to find existing customer by email
-      const customers = await stripe.customers.list({
-        email: customer.email,
-        limit: 1,
-      });
-      
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-        console.log('Found existing Stripe customer:', stripeCustomer.id);
-      } else {
-        // Create new customer
-        stripeCustomer = await stripe.customers.create({
-          email: customer.email,
-          name: `${customer.firstName} ${customer.lastName}`,
-          phone: customer.phoneNumber || undefined,
-          metadata: {
-            customerId: String(customer.id),
-            businessName: customer.businessName || '',
-          },
+    const stripeCustomer = await getOrCreateStripeCustomer({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      stripeCustomerId: customer.stripeCustomerId
+    });
+      if (!customer.stripeCustomerId) {
+        await customerRepo.update(customer.id, {
+          stripeCustomerId: stripeCustomer.id,
         });
-        console.log('Created new Stripe customer:', stripeCustomer.id);
       }
-    } catch (error: any) {
-      console.error('Error finding customer, creating new one:', error.message);
-      stripeCustomer = await stripe.customers.create({
-        email: customer.email,
-        name: `${customer.firstName} ${customer.lastName}`,
-        phone: customer.phoneNumber || undefined,
-        metadata: {
-          customerId: String(customer.id),
-          businessName: customer.businessName || '',
-        },
-      });
-      console.log('Created new Stripe customer:', stripeCustomer.id);
-    }
 
     // Attach payment method to customer
     try {
       await stripe.paymentMethods.attach(stripePaymentMethod.id, {
         customer: stripeCustomer.id,
       });
-      console.log('Payment method attached to customer');
     } catch (error: any) {
-      if (error.code === 'resource_already_exists') {
-        console.log('Payment method already attached to customer');
-      } else {
+      // Ignore if already attached
+      if (error.code !== 'resource_already_exists') {
         throw error;
       }
     }
@@ -444,80 +365,157 @@ async function processStripePayment(
         default_payment_method: stripePaymentMethod.id,
       },
     });
-    console.log('Set as default payment method');
 
-    // Create payment intent
-    const intent = await stripe.paymentIntents.create({
-      amount: Math.round(invoice.amount * 100), // Convert to cents
-      currency: currency.currencyCode.toLowerCase(),
+    const currencyCode = currency.currencyCode.toLowerCase();
+
+    // Calculate the total amount to charge
+    const amountInCents = Math.round(Number(invoice.total) * 100);
+
+    // Build metadata for webhook processing
+    const paymentMetadata: Record<string, string> = {
+      customerId: String(customer.id),
+      invoiceId: String(invoice.id),
+      customerPackageId: String(customerPackage.id),
+      paymentMethodId: String(paymentMethod.id),
+      currencyId: String(currency.id),
+      packageId: String(pkg.id),
+      packageName: pkg.name || "",
+      billingCycle: pkg.billingCycle || "Monthly",
+      autoRenew: String(autoRenew),
+      localInvoiceNumber: invoice.invoiceNumber || "",
+    };
+
+    // Add orderId only if order exists
+    if (order) {
+      paymentMetadata.orderId = String(order.id);
+    }
+
+    const idempotencyKey = `payment_${invoice.id}_${paymentMethod.id}_${amountInCents}`;
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: currencyCode,
       customer: stripeCustomer.id,
       payment_method: stripePaymentMethod.id,
-      confirm: true, // Auto-confirm the payment
+      metadata: paymentMetadata,
+      description: `Payment for Invoice #${invoice.invoiceNumber}`,
+      confirm: true,
       automatic_payment_methods: {
         enabled: true,
-        allow_redirects: 'never'
+        allow_redirects: 'never',
       },
-      description: `Payment for Invoice #${invoice.invoiceNumber || invoice.id}`,
-      metadata: {
-        customerId: String(customer.id),
-        orderId: String(order.id),
-        invoiceId: String(invoice.id),
-        customerPackageId: String(customerPackage.id),
-        paymentMethodId: String(paymentMethod.id),
-        currencyId: String(currency.id),
-        packageId: String(pkg.id),
-        packageName: pkg.packageName || "",
-        billingCycle: pkg.billingCycle || "Monthly",
-        autoRenew: String(autoRenew),
+    },
+    {
+      idempotencyKey,
+    }
+   );
+
+
+    // Create Stripe invoice
+    try {
+      // Build invoice items
+      const stripeInvoiceItems: { description: string; amount: number }[] = [];
+
+      const invoiceItems = invoice.items || [];
+      for (const item of invoiceItems) {
+        const itemAmount = Number(item.amount ?? 0);
+        const itemQuantity = Number(item.quantity ?? 1);
+        const lineTotal = itemAmount * itemQuantity;
+
+        if (lineTotal > 0) {
+          stripeInvoiceItems.push({
+            description: item.description || "Invoice Item",
+            amount: lineTotal,
+          });
+        }
       }
-    });
 
-    console.log(`Payment Intent created: ${intent.id}`);
-    console.log(`Status: ${intent.status}`);
+      // Create invoice items
+      await createStripeInvoiceItems({
+        stripeCustomerId: stripeCustomer.id,
+        currency: currencyCode,
+        items: stripeInvoiceItems,
+      });
 
-    if (intent.status === 'succeeded') {
-      console.log('Payment succeeded immediately!');
+      // Handle discount
+      const invoiceCouponIds: (string | null)[] = [];
+
+      if (invoice.isDiscount && Number(invoice.discountValue) > 0) {
+        // Create a one-time coupon for the invoice discount
+        const discountCoupon = await stripe.coupons.create({
+          percent_off: invoice.discountType === "percentage" ? Number(invoice.discountValue) : undefined,
+          amount_off: invoice.discountType !== "percentage" ? Math.round(Number(invoice.discountValue) * 100) : undefined,
+          currency: invoice.discountType !== "percentage" ? currencyCode : undefined,
+          duration: "once",
+          metadata: {
+            invoiceId: String(invoice.id),
+            invoiceNumber: invoice.invoiceNumber || "",
+          },
+        });
+        invoiceCouponIds.push(discountCoupon.id);
+      }
+
+      // Create and finalize invoice
+      const stripeInvoice = await createStripeInvoice({
+        stripeCustomerId: stripeCustomer.id,
+        couponIds: invoiceCouponIds.length > 0 ? invoiceCouponIds : undefined,
+        metadata: {
+          ...paymentMetadata,
+          paymentIntentId: paymentIntent.id,
+          paidViaPaymentIntent: "true",
+        },
+        description: `Invoice #${invoice.invoiceNumber || invoice.id}`,
+      });
+
+      if (stripeInvoice?.id) {
+        await finalizeStripeInvoice(stripeInvoice.id);
+        // Mark as paid since
+        await stripe.invoices.pay(stripeInvoice.id, {
+          paid_out_of_band: true,
+        });
+      }
+    } catch (invoiceError: any) {
+      console.error('Failed to create Stripe dashboard invoice:', invoiceError.message);
+    }
+
+    // Handle PaymentIntent status
+    if (paymentIntent.status === 'succeeded') {
       return {
         success: true,
-        clientSecret: intent.client_secret,
-        paymentIntentId: intent.id,
-        status: intent.status,
-        message: "Payment succeeded! Webhook will update records.",
-        note: "Database will be updated via webhook"
+        clientSecret: paymentIntent.client_secret ?? undefined,
+        paymentIntentId: paymentIntent.id,
+        status: 'succeeded',
+        message: "Payment succeeded"
       };
-    } else if (intent.status === 'requires_action') {
-      console.log('Payment requires additional authentication (3D Secure)');
+    } else if (paymentIntent.status === 'requires_action') {
       return {
         success: true,
-        clientSecret: intent.client_secret,
-        paymentIntentId: intent.id,
-        status: intent.status,
+        clientSecret: paymentIntent.client_secret ?? undefined,
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
         requiresAction: true,
         message: "Payment requires additional authentication",
-        nextActionUrl: intent.next_action?.redirect_to_url?.url
+        nextActionUrl: paymentIntent.next_action?.redirect_to_url?.url ?? undefined
       };
-    } else if (intent.status === 'processing') {
-      console.log('Payment is processing...');
+    } else if (paymentIntent.status === 'processing') {
       return {
         success: true,
-        clientSecret: intent.client_secret,
-        paymentIntentId: intent.id,
-        status: intent.status,
-        message: "Payment is processing. You will be notified when complete."
+        clientSecret: paymentIntent.client_secret ?? undefined,
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
+        message: "Payment is processing"
       };
     } else {
-      console.log(`Unexpected payment status: ${intent.status}`);
       return {
         success: false,
-        paymentIntentId: intent.id,
-        status: intent.status,
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
         message: "Payment could not be completed",
-        error: intent.last_payment_error?.message
+        error: paymentIntent.last_payment_error?.message
       };
     }
 
   } catch (error: any) {
-    console.error('Stripe payment error:', error);
     return {
       success: false,
       message: error.message || "Payment processing failed",

@@ -80,7 +80,20 @@ export class Package {
   socialMediaConnectors!: { name: string; isEnabled?: boolean }[];
 
   @Column("json", { nullable: true })
-  extraAddOn!: { module: string; feature?: string, monthlyPrice?: number, yearlyPrice?: number, discount?: number, description?: string }[];
+  extraAddOn!: { module: string; feature?: string, monthlyPrice?: number, yearlyPrice?: number, discount?: number, description?: string, stripeProductId?: string | null, stripeMonthlyPriceId?: string | null, stripeYearlyPriceId?: string | null, stripeCouponId?: string | null }[];
+
+  @Column({ type: "varchar", nullable: true })
+  stripeProductId!: string | null;
+
+  @Column({ type: "varchar", nullable: true })
+  stripeMonthlyPriceId!: string | null;
+
+  @Column({ type: "varchar", nullable: true })
+  stripeYearlyPriceId!: string | null;
+
+  @Column({ type: "varchar", nullable: true })
+  stripeCouponId!: string | null;
+
 
   @Column({ default: false })
   isDelete!: boolean;

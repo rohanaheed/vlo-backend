@@ -1,8 +1,12 @@
 import { Request, Response } from "express";
 import { Subscription } from "../entity/Subscription";
 import { AppDataSource } from '../config/db';
+import { Customer } from "../entity/Customer";
+import { cancelStripeSubscription } from "../utils/stripUtils";
+import { stripe } from "../config/stripe";
 
 const subscriptionRepo = AppDataSource.getRepository(Subscription);
+const customerRepo = AppDataSource.getRepository(Customer);
 
 /**
  * @swagger
@@ -337,9 +341,32 @@ export const deleteSubscription = async (req: Request, res: Response): Promise<a
         message: "Subscription not found"
       });
     }
+
+    const now = new Date();
+
+    // Cancel in Stripe immediately
+    if (subscription.subscriptionId) {
+      try {
+        await cancelStripeSubscription(subscription.subscriptionId, false);
+      } catch (stripeError: any) {
+        console.error("Error cancelling Stripe subscription:", stripeError.message);
+      }
+    }
+
+    // Update subscription
     subscription.isDelete = true;
-    subscription.updatedAt = new Date();
+    subscription.status = "cancelled";
+    subscription.autoRenew = false;
+    subscription.endDate = now;
+    subscription.updatedAt = now;
     await subscriptionRepo.save(subscription);
+
+    // Update customer status and expiry date
+    await customerRepo.update({ id: subscription.customerId }, {
+      status: "Inactive",
+      expiryDate: now
+    });
+
     return res.json({
       success: true,
       message: "Subscription deleted successfully"
@@ -423,9 +450,25 @@ export const updateAutoRenew = async (req: Request, res: Response): Promise<any>
       });
     }
 
+    // Update in Stripe if subscription has a Stripe subscription ID
+    if (subscription.subscriptionId) {
+      try {
+        // Update subscription's cancel_at_period_end setting
+        await stripe.subscriptions.update(subscription.subscriptionId, {
+          cancel_at_period_end: !autoRenew
+        });
+      } catch (stripeError: any) {
+        console.error("Error updating Stripe subscription:", stripeError.message);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to update subscription in Stripe"
+        });
+      }
+    }
+
     subscription.autoRenew = autoRenew;
     subscription.updatedAt = new Date();
-    
+
     const updatedSubscription = await subscriptionRepo.save(subscription);
 
     return res.json({
@@ -442,3 +485,119 @@ export const updateAutoRenew = async (req: Request, res: Response): Promise<any>
   }
 };
 
+/**
+ * @swagger
+ * /api/subscriptions/{id}/cancel:
+ *   post:
+ *     tags: [Subscriptions]
+ *     summary: Cancel a subscription (optionally at period end)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Subscription ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               cancelAtPeriodEnd:
+ *                 type: boolean
+ *                 description: If true, subscription will remain active until end of billing period. If false, cancels immediately.
+ *                 default: true
+ *     responses:
+ *       200:
+ *         description: Subscription cancelled successfully
+ *       404:
+ *         description: Subscription not found
+ *       500:
+ *         description: Internal server error
+ */
+export const cancelSubscription = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { cancelAtPeriodEnd } = req.body;
+
+    const subscription = await subscriptionRepo.findOne({
+      where: { id: +id, isDelete: false }
+    });
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: "Subscription not found"
+      });
+    }
+
+    // Cancel in Stripe if subscription has a Stripe subscription ID
+    if (subscription.subscriptionId) {
+      try {
+        const stripeSubscription = await cancelStripeSubscription(subscription.subscriptionId, cancelAtPeriodEnd) as any;
+
+        // Sync dates from Stripe response
+        if (stripeSubscription?.current_period_start) {
+          subscription.startDate = new Date(stripeSubscription.current_period_start * 1000);
+        }
+        if (stripeSubscription?.current_period_end) {
+          subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
+        }
+      } catch (stripeError: any) {
+        console.error("Error cancelling Stripe subscription:", stripeError.message);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to cancel subscription in Stripe"
+        });
+      }
+    }
+
+    const now = new Date();
+
+    // Update subscription
+    if (cancelAtPeriodEnd) {
+      // Cancel at period end
+      subscription.autoRenew = false;
+    } else {
+      // Immediate cancellation
+      subscription.status = "cancelled";
+      subscription.autoRenew = false;
+      subscription.endDate = now; // End immediately
+    }
+    subscription.updatedAt = now;
+
+    const updatedSubscription = await subscriptionRepo.save(subscription);
+
+    // Update customer status and expiry date
+    if (!cancelAtPeriodEnd) {
+      // Immediate cancellation - set inactive and expire now
+      await customerRepo.update({ id: subscription.customerId }, {
+        status: "Inactive",
+        expiryDate: now
+      });
+    } else {
+      // Cancel at period end - update expiry to match subscription end date
+      await customerRepo.update({ id: subscription.customerId }, {
+        expiryDate: subscription.endDate
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: cancelAtPeriodEnd
+        ? "Subscription will be cancelled at the end of the billing period"
+        : "Subscription cancelled immediately",
+      data: updatedSubscription
+    });
+  } catch (error) {
+    console.error("Error cancelling subscription:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};

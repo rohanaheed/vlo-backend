@@ -5,12 +5,105 @@ import { PackageModule } from "../entity/PackageModule";
 import { Customer } from "../entity/Customer";
 import { Currency } from "../entity/Currency";
 import { CustomerPackage } from "../entity/CustomerPackage";
+import { createStripeProduct, findStripeAddOnProduct, updateStripeProduct, createStripePrice, createStripeCoupon, archiveStripeCoupon, archiveStripePrice, archiveStripeProduct, findExistingPrice, findExistingCoupon } from "../utils/stripUtils";
+import { stripe } from "../config/stripe";
 
 const packageRepo = AppDataSource.getRepository(Package);
 const packageModuleRepo = AppDataSource.getRepository(PackageModule);
 const customerRepo = AppDataSource.getRepository(Customer);
 const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
 const currencyRepo = AppDataSource.getRepository(Currency);
+
+// Get or Create Addon In Stripe
+export const getOrCreateGlobalAddon = async ({
+  module,
+  feature,
+  description,
+  monthlyPrice,
+  yearlyPrice,
+  discount,
+  currency,
+}: {
+  module: string;
+  feature?: string;
+  description?: string;
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  discount?: number;
+  currency: string;
+}) => {
+  const addonKey = feature ? `${module}::${feature}` : module;
+
+  // Product
+  let product = await findStripeAddOnProduct(module, feature);
+
+  if (!product) {
+    product = await createStripeProduct({
+      name: feature ? `${module} - ${feature}` : module,
+      description,
+      metadata: {
+        addonKey,
+        module,
+        feature: feature || "",
+        type: "addon",
+      },
+    });
+  }
+
+  // Prices
+  let monthlyPriceObj = null;
+  if (monthlyPrice !== undefined) {
+    monthlyPriceObj = await findExistingPrice(product.id, "month");
+    if (!monthlyPriceObj) {
+      monthlyPriceObj = await createStripePrice({
+        productId: product.id,
+        amount: monthlyPrice,
+        currency,
+        interval: "month",
+        metadata: { type: "addon", addonKey, interval: "month" },
+      });
+    }
+  }
+
+  let yearlyPriceObj = null;
+  if (yearlyPrice !== undefined) {
+    yearlyPriceObj = await findExistingPrice(product.id, "year");
+    if (!yearlyPriceObj) {
+      yearlyPriceObj = await createStripePrice({
+        productId: product.id,
+        amount: yearlyPrice,
+        currency,
+        interval: "year",
+        metadata: { type: "addon", addonKey, interval: "year" },
+      });
+    }
+  }
+
+  // Coupon
+  let couponObj = null;
+  if (discount && discount > 0) {
+    couponObj = await findExistingCoupon(addonKey);
+    if (!couponObj) {
+      couponObj = await createStripeCoupon({
+        discount,
+        metadata: {
+          addonKey,
+          module,
+          feature: feature || "",
+          type: "addon",
+          productId: product.id,
+        },
+      });
+    }
+  }
+
+  return {
+    stripeProductId: product.id,
+    stripeMonthlyPriceId: monthlyPriceObj?.id || null,
+    stripeYearlyPriceId: yearlyPriceObj?.id || null,
+    stripeCouponId: couponObj?.id || null,
+  };
+};
 
 /**
  * @openapi
@@ -174,7 +267,8 @@ const currencyRepo = AppDataSource.getRepository(Currency);
  */
 // Create a new package
 export const createPackage = async (req: Request, res: Response): Promise<any> => {
-  const {
+  try {
+    const {
     name,
     description,
     type,
@@ -203,13 +297,13 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   } = req.body;
 
   // Check if package with same name already exists
-  const existing = await packageRepo.findOneBy({ name });
+  const existing = await packageRepo.findOneBy({ name, isDelete: false });
   if (existing) {
     return res.status(409).json({ message: "Package with this name already exists" });
   }
 
   // Check if currency exist
-  const currency = await currencyRepo.findOne({ where: { id: currencyId } });
+  const currency = await currencyRepo.findOne({ where: { id: currencyId, isDelete: false } });
   if (!currency) {
     return res.status(404).json({ message: "Currency not found" });
   }
@@ -244,7 +338,93 @@ export const createPackage = async (req: Request, res: Response): Promise<any> =
   });
 
   await packageRepo.save(newPackage);
-  return res.status(201).json(newPackage);
+
+  if( type === "Paid"){
+    const stripeProduct = await createStripeProduct({
+    name: newPackage.name,
+    description: newPackage.description,
+    metadata: { 
+      packageId: String(newPackage.id),
+      billingCycle: newPackage.billingCycle,
+      type: newPackage.type
+     }
+  });
+
+  newPackage.stripeProductId = stripeProduct.id;
+
+  // Package Prices
+  const monthlyPrice = await createStripePrice({
+    productId: stripeProduct.id,
+    amount: newPackage.priceMonthly,
+    currency: currency.currencyCode,
+    interval: "month",
+     metadata: {
+        type: "package",
+        packageId: String(newPackage.id),
+        interval: "month",
+      }
+  });
+
+  const yearlyPrice = await createStripePrice({
+    productId: stripeProduct.id,
+    amount: newPackage.priceYearly,
+    currency: currency.currencyCode,
+    interval: "year",
+    metadata: {
+        type: "package",
+        packageId: String(newPackage.id),
+        interval: "year",
+      }
+  });
+
+  newPackage.stripeMonthlyPriceId = monthlyPrice.id;
+  newPackage.stripeYearlyPriceId = yearlyPrice.id;
+
+  // Package Discounts
+ if (newPackage.discount > 0) {
+    const coupon = await createStripeCoupon({
+      discount: newPackage.discount,
+      metadata: {
+        type: "package",
+        packageId: String(newPackage.id),
+        productId: stripeProduct.id,
+      },
+    });
+    newPackage.stripeCouponId = coupon?.id || null;
+  }
+  // Extra Addons
+  if (newPackage.extraAddOn?.length) {
+  for (const addOn of newPackage.extraAddOn) {
+    const stripeRefs = await getOrCreateGlobalAddon({
+      module: addOn.module,
+      feature: addOn.feature,
+      description: addOn.description,
+      monthlyPrice: addOn.monthlyPrice,
+      yearlyPrice: addOn.yearlyPrice,
+      discount: addOn.discount,
+      currency: currency.currencyCode,
+    });
+
+    Object.assign(addOn, stripeRefs);
+  }
+}
+
+  await packageRepo.save(newPackage);
+  }
+  
+  return res.status(201).json({
+    success : true,
+    data: newPackage,
+    message: "Package Created Sucessfully"
+  });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+       message: "Internal server error", 
+       error: error instanceof Error ? error.message : error 
+  });
+  }
 };
 
 /**
@@ -522,7 +702,8 @@ export const getPackageById = async (req: Request, res: Response): Promise<any> 
  */
 
 export const updatePackage = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
   const packageItem = await packageRepo.findOne({
     where: { id: Number(id), isDelete: false }
@@ -534,16 +715,20 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
 
   // Check if name is being changed and if it conflicts with existing package
   if (req.body.name && req.body.name !== packageItem.name) {
-    const existing = await packageRepo.findOneBy({ name: req.body.name });
+    const existing = await packageRepo.findOneBy({ name: req.body.name, isDelete: false });
     if (existing) {
       return res.status(409).json({ message: "Package with this name already exists" });
     }
   }
 
-  // Update package fields
+  // Get Old Values
+  const oldPriceMonthly = packageItem.priceMonthly;
+  const oldPriceYearly = packageItem.priceYearly;
+  const oldDiscount = packageItem.discount;
+  const oldCouponId = packageItem.stripeCouponId;
+
+  // Update Package
   const updateData: Partial<Package> = {};
-  
-  // Dynamically update only allowed fields for scalability
   const allowedFields: (keyof Package)[] = [
     "name",
     "type",
@@ -576,11 +761,112 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
       (updateData as any)[field] = (req.body as any)[field];
     }
   }
-  
+
   Object.assign(packageItem, updateData);
+  await packageRepo.save(packageItem);
+
+  if (packageItem.type === "Paid") {
+    const currency = await currencyRepo.findOne({
+      where: { id: packageItem.currencyId, isDelete: false }
+    });
+
+    if (!currency) {
+      return res.status(404).json({ message: "Currency not found" });
+    }
+
+    // Update Package Product in Stripe
+    if (packageItem.stripeProductId) {
+      await updateStripeProduct({
+        productId: packageItem.stripeProductId,
+        name: packageItem.name,
+        description: packageItem.description,
+        metadata: {
+          packageId: String(packageItem.id),
+          billingCycle: packageItem.billingCycle,
+          type: packageItem.type
+        }
+      });
+    }
+
+    // Update Prices If Changed
+    const monthlyPriceChanged = req.body.priceMonthly !== undefined && req.body.priceMonthly !== oldPriceMonthly;
+    if (monthlyPriceChanged && packageItem.stripeProductId) {
+      const price = await createStripePrice({
+        productId: packageItem.stripeProductId,
+        amount: packageItem.priceMonthly,
+        currency: currency.currencyCode,
+        interval: "month",
+        oldPriceId: packageItem.stripeMonthlyPriceId,
+        metadata: { type: "package", packageId: String(packageItem.id), interval: "month" }
+      });
+      packageItem.stripeMonthlyPriceId = price.id;
+    }
+
+    const yearlyPriceChanged = req.body.priceYearly !== undefined && req.body.priceYearly !== oldPriceYearly;
+    if (yearlyPriceChanged && packageItem.stripeProductId) {
+      const price = await createStripePrice({
+        productId: packageItem.stripeProductId,
+        amount: packageItem.priceYearly,
+        currency: currency.currencyCode,
+        interval: "year",
+        oldPriceId: packageItem.stripeYearlyPriceId,
+        metadata: { type: "package", packageId: String(packageItem.id), interval: "year" }
+      });
+      packageItem.stripeYearlyPriceId = price.id;
+    }
+
+    // Update Discount If Changed
+    const discountChanged = req.body.discount !== undefined && req.body.discount !== oldDiscount;
+    if (discountChanged) {
+      if (packageItem.discount > 0) {
+        const coupon = await createStripeCoupon({
+          discount: packageItem.discount,
+          oldCouponId: oldCouponId,
+          metadata: { type: "package", packageId: String(packageItem.id), productId: packageItem.stripeProductId || "" },
+        });
+        packageItem.stripeCouponId = coupon?.id || null;
+      } else {
+        // Discount removed
+        if (oldCouponId) {
+          await archiveStripeCoupon(oldCouponId);
+        }
+        packageItem.stripeCouponId = null;
+      }
+    }
+
+  // Update Extra Addons
+  if (packageItem.extraAddOn?.length) {
+    for (const addOn of packageItem.extraAddOn) {
+      const stripeRefs = await getOrCreateGlobalAddon({
+        module: addOn.module,
+        feature: addOn.feature,
+        description: addOn.description,
+        monthlyPrice: addOn.monthlyPrice,
+        yearlyPrice: addOn.yearlyPrice,
+        discount: addOn.discount,
+        currency: currency.currencyCode,
+      });
+
+      Object.assign(addOn, stripeRefs);
+     }
+   }
+
+ }
 
   await packageRepo.save(packageItem);
-  return res.json(packageItem);
+
+  return res.status(200).json({
+    success: true,
+    data: packageItem,
+    message : "Package Updated Sucessfully"
+  })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message : "Internal Server Error",
+      error: error instanceof Error ? error.message : error 
+    })
+  }
 };
 
 /**
@@ -606,21 +892,78 @@ export const updatePackage = async (req: Request, res: Response): Promise<any> =
  */
 // Soft delete package
 export const deletePackage = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const packageItem = await packageRepo.findOne({
-    where: { id: Number(id), isDelete: false }
-  });
+    const packageItem = await packageRepo.findOne({
+      where: { id: Number(id), isDelete: false }
+    });
 
-  if (!packageItem) {
-    return res.status(404).json({ message: "Package not found" });
+    if (!packageItem) {
+      return res.status(404).json({ message: "Package not found" });
+    }
+
+    // Only process Stripe logic if package type is "Paid"
+    if (packageItem.type === "Paid") {
+      let ActiveSubscription = false;
+
+      if (packageItem.stripeMonthlyPriceId || packageItem.stripeYearlyPriceId) {
+        const pricesToCheck = [
+          packageItem.stripeMonthlyPriceId,
+          packageItem.stripeYearlyPriceId,
+        ].filter(Boolean) as string[];
+
+        for (const priceId of pricesToCheck) {
+          const subs = await stripe.subscriptions.list({
+            price: priceId,
+            status: "active",
+            limit: 1,
+          });
+
+          if (subs.data.length > 0) {
+            ActiveSubscription = true;
+            break;
+          }
+        }
+      }
+
+      // Archive Stripe resources ONLY if no active subscriptions
+      if (!ActiveSubscription) {
+        // Archive package coupon
+        if (packageItem.stripeCouponId) {
+          await archiveStripeCoupon(packageItem.stripeCouponId);
+        }
+
+        // Archive package prices
+        if (packageItem.stripeMonthlyPriceId) {
+          await archiveStripePrice(packageItem.stripeMonthlyPriceId);
+        }
+        if (packageItem.stripeYearlyPriceId) {
+          await archiveStripePrice(packageItem.stripeYearlyPriceId);
+        }
+
+        // Archive package product
+        if (packageItem.stripeProductId) {
+          await archiveStripeProduct(packageItem.stripeProductId);
+        }
+      }
+    }
+
+    // Set isDelete to true instead of actually deleting
+    packageItem.isDelete = true;
+    await packageRepo.save(packageItem);
+
+    return res.json({
+      success: true,
+      message: "Package soft deleted successfully"
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : error
+    });
   }
-
-  // Set isDelete to true instead of actually deleting
-  packageItem.isDelete = true;
-  await packageRepo.save(packageItem);
-
-  return res.json({ message: "Package soft deleted successfully" });
 };
 
 /**
