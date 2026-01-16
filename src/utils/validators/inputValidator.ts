@@ -52,8 +52,40 @@ export const customerSchema = Joi.object({
 });
 
 export const updateCustomerSchema = Joi.object({
-  practiceArea: Joi.array().items(Joi.string()).optional()
+  title: Joi.string().allow("").optional(),
+  firstName: Joi.string().allow("").optional(),
+  middleName: Joi.string().allow("").optional(),
+  lastName: Joi.string().allow("").optional(),
+  businessName: Joi.string().allow("").optional(),
+  tradingName: Joi.string().allow("").optional(),
+  note: Joi.string().allow("").optional(),
+  businessSize: Joi.number().min(0).optional(),
+  businessEntity: Joi.string().allow("").optional(),
+  businessType: Joi.string().allow("").optional(),
+  businessWebsite: Joi.string().allow("").optional(),
+  businessAddress: Joi.object({
+    buildingName: Joi.string().allow("").optional(),
+    buildingNumber: Joi.string().allow("").optional(),
+    street: Joi.string().allow("").optional(),
+    town: Joi.string().allow("").optional(),
+    city: Joi.string().allow("").optional(),
+    county: Joi.string().allow("").optional(),
+    postalCode: Joi.string().allow("").optional(),
+    country: Joi.string().allow("").optional(),
+  }).optional(),
+  referralCode: Joi.number().optional(),
+  phoneNumber: Joi.string().allow("").optional(),
+  phoneType: Joi.string().allow("").optional(),
+  countryCode: Joi.string().allow("").optional(),
+  emailType: Joi.string().allow("").optional(),
+  email: Joi.string().email().optional(),
+  password: Joi.string().min(8).optional(),
+  stage: Joi.string().allow("").optional(),
+  churnRisk: Joi.string().allow("").optional(),
+  practiceArea: Joi.array().items(Joi.string()).optional(),
+  status: Joi.string().valid("Active", "Trial", "License Expired", "Free", "Inactive").optional()
 });
+
 
 export const businessTypeSchema = Joi.object({
   name: Joi.string().min(2).required()
@@ -315,7 +347,7 @@ export const updateInvoiceSchema = Joi.object({
     'partialyPaid', 'disputed', 'reminder', 'resend',
     'void', 'viewed', 'unpaid', 'bad'
   ).optional(),
-  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded', 'cancelled').optional(),
+  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded', 'cancelled',"processing").optional(),
   plan: Joi.string().min(2).max(100).optional().allow(''),
   items: Joi.array().items(
     Joi.object({
@@ -382,10 +414,18 @@ export const updateCreditNoteSchema = Joi.object({
   invoiceId: Joi.number().integer().positive().optional(),
   currencyId: Joi.number().integer().positive().optional(),
   status: Joi.string().valid(
-    'draft', 'sent', 'paid', 'overdue', 'cancelled', 
-    'partialyPaid', 'disputed', 'reminder', 'resend', 
+    'draft', 'sent', 'paid', 'overdue', 'cancelled',
+    'partialyPaid', 'disputed', 'reminder', 'resend',
     'void', 'viewed', 'unpaid'
   ).optional()
+});
+
+export const paymentNowSchema = Joi.object({
+  customerId: Joi.number().integer().positive().required(),
+  orderId: Joi.number().integer().positive().optional(),
+  invoiceId: Joi.number().integer().positive().required(),
+  paymentMethodId: Joi.number().integer().positive().required(),
+  autoRenew: Joi.boolean().optional().default(true)
 });
 
 export const noteSchema = Joi.object({

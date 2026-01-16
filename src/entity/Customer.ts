@@ -109,12 +109,18 @@ export class Customer {
   @Column({default: false})
   isEmailVerified!: boolean;
 
+  @Column({default: false})
+  isPhoneVerified!: boolean;
+
   @Column({ default: 0 })
   currencyId!: number;
 
   @Column({ default: 0 })
   packageId!: number;
-  
+
+  @Column({ type: "varchar", nullable: true, default: null })
+  stripeCustomerId!: string | null;
+
   @CreateDateColumn()
   expiryDate!: Date;
 

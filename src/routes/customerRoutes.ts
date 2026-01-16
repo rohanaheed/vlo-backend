@@ -16,7 +16,8 @@ import {
   selectCustomerAddOns,
   getCustomerOrderSummary,
   getCustomerDashboardStats,
-  deleteCustomer
+  deleteCustomer,
+  isCustomerVerified
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -32,6 +33,9 @@ router.post("/send-email-verification-code", authorize(["super_admin", "user"]),
 
 // Verify Email Code
 router.post("/verify-verification-code", authorize(["super_admin", "user"]), validateRequest(verifyOTPSchema), asyncHandler(verifyEmailCode));
+
+// Is Email or Phone Verified
+router.post("/is-verified", authorize(["super_admin", "user"]), asyncHandler(isCustomerVerified));
 
 // Get active customers per year
 router.get("/active-per-year", authorize(["super_admin"]), asyncHandler(getActiveCustomersPerYear));
