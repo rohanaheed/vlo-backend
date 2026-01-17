@@ -434,7 +434,6 @@ export const verifyEmailCode = async ( req: Request, res: Response ): Promise<an
     const customer = await customerRepo.findOne({
       where: {
         email: validEmail,
-        otp: validCode,
         isDelete: false,
       },
     });
@@ -444,18 +443,25 @@ export const verifyEmailCode = async ( req: Request, res: Response ): Promise<an
         message: "Customer Not Found",
       });
     }
+    // Check Verified Customer
+    if (customer.isEmailVerified) {
+      return res.status(400).json({
+      success: false,
+      message: "Email already verified",
+    });
+    }
+    // Check OTP Expiry
+    if (customer.otpExpiry && customer.otpExpiry < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification Code Expired",
+      });
+    }
     // Check OTP provided is Correct
     if (customer.otp !== validCode) {
       return res.status(400).json({
         success: false,
-        message: "Invalid Verification Code",
-      });
-    }
-    // Check OTP Expiry
-    if (!customer.otpExpiry || customer.otpExpiry < new Date()) {
-      return res.status(400).json({
-        success: false,
-        message: "Verification Code Expired",
+        message: "Verification Code is Incorrect",
       });
     }
     customer.isEmailVerified = true
