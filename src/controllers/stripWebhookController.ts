@@ -220,14 +220,14 @@ const handlePaymentSuccess = async (intent: Stripe.PaymentIntent) => {
 
     // Get Customer Package & Package
     const customerPackage = await runner.manager.findOne(CustomerPackage, {
-      where: { id: customerPackageId }
+      where: { id: customerPackageId, isDelete: false }
     });
     if (!customerPackage) {
       throw new Error(`CustomerPackage ${customerPackageId} not found`);
     }
 
     const pkg = await runner.manager.findOne(Package, {
-      where: { id: customerPackage.packageId }
+      where: { id: customerPackage.packageId, isDelete: false, isActive: true }
     });
     if (!pkg) {
       throw new Error(`Package ${customerPackage.packageId} not found`);
@@ -235,7 +235,7 @@ const handlePaymentSuccess = async (intent: Stripe.PaymentIntent) => {
 
     // Get Customer
     const customer = await runner.manager.findOne(Customer, {
-      where: { id: customerId }
+      where: { id: customerId, isDelete: false }
     });
     if (!customer) {
       throw new Error(`Customer ${customerId} not found`);
@@ -243,7 +243,7 @@ const handlePaymentSuccess = async (intent: Stripe.PaymentIntent) => {
 
     // Get Currency
     const currency = await runner.manager.findOne(Currency, {
-      where: { id: currencyId }
+      where: { id: currencyId, isDelete: false }
     });
 
     // Calculate Subscription Dates
@@ -449,7 +449,7 @@ const handlePaymentFailure = async (intent: Stripe.PaymentIntent) => {
 
   // Check If Failed Transaction Already Recorded
   const existingIntentTransaction = await transactionRepo.findOne({
-    where: { reference: intent.id }
+    where: { reference: intent.id, isDeleted: false }
   });
 
   if (existingIntentTransaction) {
@@ -551,7 +551,7 @@ const handleInvoicePaymentSucceeded = async (stripeInvoice: Stripe.Invoice) => {
 
     // Get package
     const pkg = await runner.manager.findOne(Package, {
-      where: { id: customerPackage.packageId }
+      where: { id: customerPackage.packageId, isDelete: false, isActive: true }
     });
     if (!pkg) {
       throw new Error(`Package ${customerPackage.packageId} not found`);
@@ -559,7 +559,7 @@ const handleInvoicePaymentSucceeded = async (stripeInvoice: Stripe.Invoice) => {
 
     // Get currency
     const currency = await runner.manager.findOne(Currency, {
-      where: { id: currencyId }
+      where: { id: currencyId, isDelete: false }
     });
 
     // Get subscription
@@ -814,7 +814,7 @@ const handleInvoicePaymentFailed = async (stripeInvoice: Stripe.Invoice) => {
 
     // Get package
     const pkg = await runner.manager.findOne(Package, {
-      where: { id: customerPackage.packageId }
+      where: { id: customerPackage.packageId, isDelete: false, isActive: true }
     });
     if (!pkg) {
       throw new Error(`Package ${customerPackage.packageId} not found`);
@@ -822,7 +822,7 @@ const handleInvoicePaymentFailed = async (stripeInvoice: Stripe.Invoice) => {
 
     // Get currency
     const currency = await runner.manager.findOne(Currency, {
-      where: { id: currencyId }
+      where: { id: currencyId, isDelete: false }
     });
 
     // Get subscription

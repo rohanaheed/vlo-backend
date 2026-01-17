@@ -4,10 +4,7 @@ import { Customer } from "../entity/Customer";
 
 const customerRepo = AppDataSource.getRepository(Customer);
 
-/* ======================================================
-   CUSTOMER
-====================================================== */
-
+// Stripe Customer
 export const getOrCreateStripeCustomer = async (customer: {
   id: number;
   email: string;
@@ -15,13 +12,13 @@ export const getOrCreateStripeCustomer = async (customer: {
   lastName?: string;
   stripeCustomerId?: string | null;
 }) => {
-  // If customer already has a Stripe ID, try to retrieve it
+  // If stripeCustomerId exists, retrieve the customer
   if (customer.stripeCustomerId) {
     const existingCustomer = await stripe.customers.retrieve(customer.stripeCustomerId);
 
-    // Check if customer was deleted in Stripe
+    // Check if customer deleted in Stripe
     if ('deleted' in existingCustomer && existingCustomer.deleted) {
-      // Customer was deleted, create a new one
+      // Create New
       const newStripeCustomer = await stripe.customers.create({
         email: customer.email,
         name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
@@ -45,7 +42,7 @@ export const getOrCreateStripeCustomer = async (customer: {
     metadata: { customerId: String(customer.id) },
   });
 
-  // Save stripeCustomerId to the database
+  // Save
   await customerRepo.update(customer.id, {
     stripeCustomerId: stripeCustomer.id,
   });
@@ -53,10 +50,7 @@ export const getOrCreateStripeCustomer = async (customer: {
   return stripeCustomer;
 };
 
-/* ======================================================
-   PRODUCT (PACKAGE / ADDON)
-====================================================== */
-
+// Stripe Products
 export const createStripeProduct = async ({
   name,
   description,
@@ -105,10 +99,7 @@ export const updateStripeProduct = async ({
   });
 };
 
-/* ======================================================
-   PRICES (CREATE NEW + ARCHIVE OLD)
-====================================================== */
-
+// Stripe Prices
 export const createStripePrice = async ({
   productId,
   amount,
@@ -141,9 +132,7 @@ export const createStripePrice = async ({
   });
 };
 
-/**
- * Archive/deactivate an existing price.
- */
+// Archive/deactivate a Stripe Prices
 export const archiveStripePrice = async (priceId: string | null | undefined) => {
   if (!priceId) return;
 
@@ -154,10 +143,7 @@ export const archiveStripePrice = async (priceId: string | null | undefined) => 
   }
 };
 
-/**
- * Find existing active prices for a product by interval (month/year)
- * Returns the most recent active price with isCurrent metadata
- */
+// Find Existing Prices
 export const findExistingPrice = async (
   productId: string,
   interval: "month" | "year"
@@ -170,14 +156,14 @@ export const findExistingPrice = async (
       limit: 100,
     });
 
-    // Find price matching the interval, prefer one with isCurrent metadata
+    // Finf By Interval
     const matchingPrices = prices.data.filter(
       (p) => p.recurring?.interval === interval
     );
 
     if (matchingPrices.length === 0) return null;
 
-    // Prefer price marked as current
+    // Mark Current price
     const currentPrice = matchingPrices.find(
       (p) => p.metadata?.isCurrent === "true"
     );
@@ -195,9 +181,7 @@ export const findExistingPrice = async (
   }
 };
 
-/**
- * Find existing coupon for an addon by metadata
- */
+// Find Existing Coupons
 export const findExistingCoupon = async (
   addonKey: string
 ): Promise<{ id: string; percent_off: number | null } | null> => {
@@ -211,7 +195,7 @@ export const findExistingCoupon = async (
 
     if (matchingCoupons.length === 0) return null;
 
-    // Prefer coupon marked as current
+    // Mark Current coupon
     const currentCoupon = matchingCoupons.find(
       (c) => c.metadata?.isCurrent === "true"
     );
@@ -220,7 +204,7 @@ export const findExistingCoupon = async (
       return { id: currentCoupon.id, percent_off: currentCoupon.percent_off };
     }
 
-    // Otherwise return the most recently created matching coupon
+    // Return the most recently created
     const sortedCoupons = matchingCoupons.sort((a, b) => b.created - a.created);
     return { id: sortedCoupons[0].id, percent_off: sortedCoupons[0].percent_off };
   } catch (err) {
@@ -229,9 +213,7 @@ export const findExistingCoupon = async (
   }
 };
 
-/**
- * Archive/deactivate a Stripe product.
- */
+// Archive/deactivate a Stripe Product
 export const archiveStripeProduct = async (productId: string | null | undefined) => {
   if (!productId) return;
 
@@ -242,30 +224,19 @@ export const archiveStripeProduct = async (productId: string | null | undefined)
   }
 };
 
-/* ======================================================
-   COUPONS (CREATE NEW + DELETE OLD)
-====================================================== */
-
-/**
- * Delete/archive an existing coupon.
- * Note: Coupons can be deleted in Stripe, but this will fail if
- * the coupon is currently applied to an active subscription.
- */
+// Archive/deactivate a Stripe Coupon
 export const archiveStripeCoupon = async (couponId: string | null | undefined) => {
   if (!couponId) return;
 
   try {
     await stripe.coupons.del(couponId);
   } catch (err) {
-    // Coupon might already be deleted or in use by active subscription
+    // Coupon In Use cannot be deleted
     console.warn(`Could not delete coupon ${couponId}:`, err);
   }
 };
 
-/**
- * Creates a coupon in Stripe. Optionally deletes the old coupon first.
- * Product association is tracked via metadata.
- */
+// Create a Stripe Coupon
 export const createStripeCoupon = async ({
   discount,
   oldCouponId,
@@ -277,7 +248,7 @@ export const createStripeCoupon = async ({
 }) => {
   if (!discount || discount <= 0) return null;
 
-  // Delete old coupon if exists
+  // Delete Old Coupon
   if (oldCouponId) {
     await archiveStripeCoupon(oldCouponId);
   }
@@ -292,14 +263,7 @@ export const createStripeCoupon = async ({
   });
 };
 
-/* ======================================================
-   SUBSCRIPTIONS
-====================================================== */
-
-/**
- * Create a Stripe subscription with multiple items and optional discounts
- * Supports package with addOns, each can have their own coupon
- */
+// Stripe Subscriptions
 export const createStripeSubscription = async ({
   stripeCustomerId,
   items,
@@ -313,7 +277,7 @@ export const createStripeSubscription = async ({
   metadata?: Record<string, string>;
   billingCycleAnchor?: number;
 }) => {
-  // Filter valid coupon IDs
+  // Find Valid Coupons
   const validCoupons = (couponIds || []).filter((id): id is string => !!id);
   const discounts = validCoupons.map(coupon => ({ coupon }));
 
@@ -332,9 +296,7 @@ export const createStripeSubscription = async ({
   });
 };
 
-/**
- * Update an existing Stripe subscription with new items and discounts
- */
+// Update a Stripe subscription
 export const updateStripeSubscription = async ({
   subscriptionId,
   items,
@@ -350,7 +312,7 @@ export const updateStripeSubscription = async ({
 }) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  // Filter valid coupon IDs
+  // Find Valid Coupons
   const validCoupons = (couponIds || []).filter((id): id is string => !!id);
   const discounts = validCoupons.map(coupon => ({ coupon }));
 
@@ -373,9 +335,7 @@ export const updateStripeSubscription = async ({
   });
 };
 
-/**
- * Cancel a Stripe subscription
- */
+// Cancel a Stripe subscription
 export const cancelStripeSubscription = async (
   subscriptionId: string,
   cancelAtPeriodEnd: boolean = false
@@ -388,16 +348,12 @@ export const cancelStripeSubscription = async (
   return await stripe.subscriptions.cancel(subscriptionId);
 };
 
-/**
- * Retrieve a Stripe subscription
- */
+// Retrieve a Stripe subscription
 export const getStripeSubscription = async (subscriptionId: string) => {
   return await stripe.subscriptions.retrieve(subscriptionId);
 };
 
-/**
- * Pause a Stripe subscription (set to past_due behavior)
- */
+// Pause a Stripe subscription
 export const pauseStripeSubscription = async (subscriptionId: string) => {
   return await stripe.subscriptions.update(subscriptionId, {
     pause_collection: {
@@ -406,29 +362,14 @@ export const pauseStripeSubscription = async (subscriptionId: string) => {
   });
 };
 
-/**
- * Resume a paused Stripe subscription
- */
+// Resume a paused Stripe subscription
 export const resumeStripeSubscription = async (subscriptionId: string) => {
   return await stripe.subscriptions.update(subscriptionId, {
     pause_collection: "",
   });
 };
 
-/* ======================================================
-   INVOICES (ONE-TIME INVOICE FOR DASHBOARD TRACKING)
-====================================================== */
-
-/**
- * Create invoice items (line items) for a customer
- * These will be automatically included in the next invoice
- */
-
-/**
- * Create multiple invoice items at once (package + addOns)
- * Note: When using 'amount', quantity is not allowed by Stripe API.
- * The amount should already be the total (unit price * quantity if needed).
- */
+// Create Stripe Invoice Items
 export const createStripeInvoiceItems = async ({
   stripeCustomerId,
   currency,
@@ -456,10 +397,7 @@ export const createStripeInvoiceItems = async ({
   return createdItems;
 };
 
-/**
- * Create a Stripe invoice (draft state)
- * pending_invoice_items_behavior: 'include' ensures all pending items are attached
- */
+// Create a Stripe invoice
 export const createStripeInvoice = async ({
   stripeCustomerId,
   couponIds,
@@ -471,7 +409,7 @@ export const createStripeInvoice = async ({
   metadata?: Record<string, string>;
   description?: string;
 }) => {
-  // Filter valid coupon IDs
+  // Find Valid Coupons
   const validCoupons = (couponIds || []).filter((id): id is string => !!id);
   const discounts = validCoupons.map(coupon => ({ coupon }));
 
@@ -485,25 +423,19 @@ export const createStripeInvoice = async ({
   });
 };
 
-/**
- * Finalize a Stripe invoice (make it ready for payment)
- */
+
 export const finalizeStripeInvoice = async (invoiceId: string) => {
   return await stripe.invoices.finalizeInvoice(invoiceId);
 };
 
-/**
- * Pay a Stripe invoice using a specific payment method
- * Checks if invoice is already paid to avoid errors
- */
+// Pay a Stripe invoice
 export const payStripeInvoice = async (
   invoiceId: string,
   paymentMethodId?: string
 ) => {
-  // First retrieve the invoice to check its status
+ 
   const invoice = await stripe.invoices.retrieve(invoiceId);
 
-  // If already paid, return the invoice as-is
   if (invoice.status === 'paid') {
     return invoice;
   }
@@ -516,16 +448,12 @@ export const payStripeInvoice = async (
   return await stripe.invoices.pay(invoiceId);
 };
 
-/**
- * Void a Stripe invoice
- */
+// Void a Stripe invoice
 export const voidStripeInvoice = async (invoiceId: string) => {
   return await stripe.invoices.voidInvoice(invoiceId);
 };
 
-/**
- * Retrieve a Stripe invoice
- */
+// Retrieve a Stripe invoice
 export const getStripeInvoice = async (invoiceId: string) => {
   return await stripe.invoices.retrieve(invoiceId, {
     expand: ["payment_intent"],

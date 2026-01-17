@@ -13,20 +13,6 @@ const customerPackageRepo = AppDataSource.getRepository(CustomerPackage);
 const currencyRepo = AppDataSource.getRepository(Currency);
 const invoiceRepo = AppDataSource.getRepository(Invoice);
 
-// Convert Order to Customer Currency
-const convertOrderToCustomerCurrency = async (order: any, customerCurrencyId: number): Promise<any> => {
-  const currency = await currencyRepo.findOne({ where: { id: customerCurrencyId, isDelete: false } });
-  const exchangeRate = Number(currency?.exchangeRate || 1);
-
-  return {
-    ...order,
-    subTotal: Number((order.subTotal * exchangeRate).toFixed(2)),
-    discount: Number((order.discount * exchangeRate).toFixed(2)),
-    total: Number((order.total * exchangeRate).toFixed(2))
-  };
-};
-
-
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
   try {
     const { customerId } = req.params;
@@ -64,7 +50,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     if (!customerPackage) return res.status(404).json({ success: false, message: "Customer Package not found" });
 
     // Fetch Package
-    const pkg = await packageRepo.findOne({ where: { id: customerPackage.packageId, isDelete: false } });
+    const pkg = await packageRepo.findOne({ where: { id: customerPackage.packageId, isDelete: false, isActive: true } });
     if (!pkg) return res.status(404).json({ success: false, message: "Package not found" });
 
     const addOns = customerPackage.addOns ?? [];
@@ -213,9 +199,6 @@ export const getOrderById = async (req: Request, res: Response): Promise<any> =>
             });
         }
 
-        // // Convert from base currency to customer currency
-        // const convertedOrder = await convertOrderToCustomerCurrency(order, order.currencyId);
-
         return res.status(200).json({
             success: true,
             data: order,
@@ -246,14 +229,9 @@ export const getOrdersByCustomerId = async (req: Request, res: Response): Promis
             });
         }
 
-        // Convert all Orders to Customer Currency
-        const convertedOrders = await Promise.all(
-            orders.map(order => convertOrderToCustomerCurrency(order, order.currencyId))
-        );
-
         return res.status(200).json({
             success: true,
-            data: convertedOrders,
+            data: orders,
             message: "Orders fetched successfully",
         });
 
@@ -278,11 +256,6 @@ export const getAllOrders = async (req: Request, res: Response): Promise<any> =>
                 message: "Orders not found"
             });
         }
-
-        // // Convert all orders from base currency to customer currency
-        // const convertedOrders = await Promise.all(
-        //     orders.map(order => convertOrderToCustomerCurrency(order, order.currencyId))
-        // );
 
         return res.status(200).json({
             success: true,

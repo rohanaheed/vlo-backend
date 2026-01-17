@@ -180,13 +180,13 @@ export const paymentNow = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Get package
-    const pkg = await packageRepo.findOne({ where: { id: customerPackage.packageId } });
+    const pkg = await packageRepo.findOne({ where: { id: customerPackage.packageId, isDelete: false, isActive: true } });
     if (!pkg) {
       return res.status(404).json({ success: false, message: "Package not found" });
     }
 
     // Get currency
-    const currency = await currencyRepo.findOne({ where: { id: customer.currencyId } });
+    const currency = await currencyRepo.findOne({ where: { id: customer.currencyId, isDelete: false } });
     if (!currency) {
       return res.status(404).json({ success: false, message: "Currency not found" });
     }
