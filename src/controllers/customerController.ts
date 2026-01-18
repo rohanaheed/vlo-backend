@@ -540,30 +540,45 @@ export const isCustomerVerified = async (
       });
     }
 
-    const customer = await customerRepo.findOne({
-      where: [
-        email
-          ? { email, isDelete: false }
-          : undefined,
-        phoneNumber
-          ? { phoneNumber, isDelete: false }
-          : undefined,
-      ].filter(Boolean) as any, // removes undefined conditions
-    });
+    // Check Customer Email
+    const customerByEmail = email
+      ? await customerRepo.findOne({
+          where: { email, isDelete: false },
+        })
+      : null;
 
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer not found",
-      });
+    // Check Customer Phone Number
+    const customerByPhone = phoneNumber
+      ? await customerRepo.findOne({
+          where: { phoneNumber, isDelete: false },
+        })
+      : null;
+
+    const emailExists = !!customerByEmail;
+    const phoneExists = !!customerByPhone;
+
+    const isNew: { email?: boolean; phone?: boolean } = {};
+    if (email) {
+      isNew.email = !emailExists;
+    }
+    if (phoneNumber) {
+      isNew.phone = !phoneExists;
     }
 
+    const verificationStatus: { emailVerified?: boolean; phoneVerified?: boolean } = {};
+    if (email) {
+      verificationStatus.emailVerified = emailExists ? customerByEmail.isEmailVerified : false;
+    }
+    if (phoneNumber) {
+      verificationStatus.phoneVerified = phoneExists ? customerByPhone.isPhoneVerified : false;
+    }
+
+    const success = emailExists || phoneExists;
+
     return res.status(200).json({
-      success: true,
-      verificationStatus: {
-        emailVerified: customer.isEmailVerified,
-        phoneVerified: customer.isPhoneVerified,
-      },
+      success,
+      isNew,
+      verificationStatus,
     });
   } catch (error) {
     return res.status(500).json({
