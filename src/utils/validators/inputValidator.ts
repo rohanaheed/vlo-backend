@@ -249,7 +249,20 @@ export const verifyOTPSchema = Joi.object({
 });
 
 export const sendCodeSchema = Joi.object({
-  email: Joi.string().email().required()
+  email: Joi.string().email().required(),
+  verificationId: Joi.number().integer().positive().optional()
+});
+
+export const sendPhoneCodeSchema = Joi.object({
+  phoneNumber: Joi.string().pattern(/^[0-9]{7,15}$/).required(),
+  countryCode: Joi.string().pattern(/^\+[0-9]{1,4}$/).required(),
+  verificationId: Joi.number().integer().positive().optional()
+});
+
+export const verifyPhoneCodeSchema = Joi.object({
+  phoneNumber: Joi.string().pattern(/^[0-9]{7,15}$/).required(),
+  countryCode: Joi.string().pattern(/^\+[0-9]{1,4}$/).required(),
+  otp: Joi.string().length(6).pattern(/^[0-9]+$/).required()
 });
 
 export const resetPasswordSchema = Joi.object({

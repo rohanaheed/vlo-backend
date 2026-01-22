@@ -25,12 +25,14 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "mysql2": "^3.14.1",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.3",
     "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
     "stripe": "^18.2.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "twilio": "^5.11.2",
     "typeorm": "^0.3.24"
   },
   "devDependencies": {

@@ -17,11 +17,13 @@ import {
   getCustomerOrderSummary,
   getCustomerDashboardStats,
   deleteCustomer,
-  isCustomerVerified
+  isCustomerVerified,
+  sendPhoneVerificationCode,
+  verifyPhoneVerificationCode
 } from "../controllers/customerController";
 import { authorize } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { customerSchema, registrationEmailSchema, sendCodeSchema, updateCustomerSchema, verifyOTPSchema } from "../utils/validators/inputValidator";
+import { customerSchema, registrationEmailSchema, sendCodeSchema, sendPhoneCodeSchema, updateCustomerSchema, verifyOTPSchema, verifyPhoneCodeSchema } from "../utils/validators/inputValidator";
 import { validateRequest } from "../middleware/validateRequest";
 
 const router = Router();
@@ -33,6 +35,12 @@ router.post("/send-email-verification-code", authorize(["super_admin", "user"]),
 
 // Verify Email Code
 router.post("/verify-verification-code", authorize(["super_admin", "user"]), validateRequest(verifyOTPSchema), asyncHandler(verifyEmailCode));
+
+// Send Phone Verification Code to Customer
+router.post("/send-phone-verification-code", authorize(["super_admin", "user"]), validateRequest(sendPhoneCodeSchema), asyncHandler(sendPhoneVerificationCode));
+
+// Verify Phone Code
+router.post("/verify-phone-code", authorize(["super_admin", "user"]), validateRequest(verifyPhoneCodeSchema), asyncHandler(verifyPhoneVerificationCode));
 
 // Is Email or Phone Verified
 router.post("/is-verified", authorize(["super_admin", "user"]), asyncHandler(isCustomerVerified));

@@ -79,7 +79,7 @@ export class Customer {
   @Column({ default: "" })
   countryCode!: string; // +44, +1, etc.
 
-  @Column({ default: "", unique: true })
+  @Column({  nullable: true, default: null , unique: true })
   email!: string;
 
   @Column({ default: "" })
@@ -99,18 +99,6 @@ export class Customer {
 
   @Column({ type: "enum", enum: ["Active", "Trial", "License Expired", "Free", "Inactive"], default: "Free" })
   status!: Status;
-
-  @Column({ nullable: true, type: "varchar", default: null })
-  otp!: string | null;
-
-  @Column({ nullable: true, type: "datetime", default: null })
-  otpExpiry!: Date | null;
-
-  @Column({default: false})
-  isEmailVerified!: boolean;
-
-  @Column({default: false})
-  isPhoneVerified!: boolean;
 
   @Column({ default: 0 })
   currencyId!: number;
