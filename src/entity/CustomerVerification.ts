@@ -32,7 +32,7 @@ export class CustomerVerification {
     countryCode!: string;
 
     @Column({ nullable: true, type: "datetime", default: null })
-    phoneCodeSentAt!: Date | null;
+    phoneOtpExpiry!: Date | null;
 
     @Column({ default: false })
     isPhoneVerified!: boolean;

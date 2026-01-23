@@ -11,7 +11,6 @@ import {
   getRevenueTrend,
   sendVerificationCode,
   verifyEmailCode,
-  checkCustomerExist,
   selectCustomerPackage,
   selectCustomerAddOns,
   getCustomerOrderSummary,
@@ -74,8 +73,6 @@ router.get("/:id", authorize(["super_admin", "user"]), asyncHandler(getCustomerB
 
 // Send registration email to customer
 router.post("/:customerId/send-registration-email", authorize(["super_admin", "user"]), validateRequest(registrationEmailSchema), asyncHandler(sendRegistrationEmail));
-
-router.post("/check-email", authorize(["super_admin", "user"]), asyncHandler(checkCustomerExist));
 
 // Select Package
 router.put("/:customerId/select-package", authorize(["super_admin", "user"]), asyncHandler(selectCustomerPackage));

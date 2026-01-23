@@ -78,7 +78,7 @@ export const createCustomer = async (
         message: error.details[0].message,
       });
     }
-    const email = value.email.trim().toLowerCase();
+    const email = value.email.trim();
     const phoneNumber = value.phoneNumber.trim();
     const countryCode = value.countryCode?.trim() || "";
     const sendLoginCreds = value.sendEmail;
@@ -269,7 +269,7 @@ export const sendVerificationCode = async (
       });
     }
 
-    const email = value.email.trim().toLowerCase();
+    const email = value.email.trim();
     const verificationId = value.verificationId;
 
     // Block if email belongs to system user
@@ -294,47 +294,63 @@ export const sendVerificationCode = async (
       });
     }
 
+    if(verificationId && existingEmailVerification && existingEmailVerification.id !== verificationId){
+      return res.status(409).json({
+        success: false,
+        message: "This email is already in use"
+      })
+    }
+
     let verification: CustomerVerification | null = null;
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
     let message = "Verification code sent successfully";
 
     if (verificationId) {
+      // Find by verification ID
       verification = await customerVerificationRepo.findOne({
         where: { id: verificationId },
       });
       if (!verification) {
         return res.status(404).json({
           success: false,
-          message: "Verification record not found",
+          message: "Verification record not found"
         });
       }
 
+      // Check rate limiting
       if (verification.emailOtpExpiry && verification.emailOtpExpiry > new Date()) {
         return res.status(429).json({
           success: false,
           message: "Please wait until the verification code expires before requesting a new one",
         });
       }
-      // Update email existing record
+
+      // Find If New Request or Resend Request
+      const isResend = verification.email === email;
+      message = isResend ? "Verification code resent successfully" : "Verification code sent successfully";
+
+      // Update email on existing record
       verification.email = email;
       verification.emailOtp = otp;
       verification.emailOtpExpiry = otpExpiry;
-      message = "Verification code resent successfully";
     } else if (existingEmailVerification) {
       // Use existing email verification record
       verification = existingEmailVerification;
+
+      // Check rate limiting
       if (verification.emailOtpExpiry && verification.emailOtpExpiry > new Date()) {
         return res.status(429).json({
           success: false,
           message: "Please wait until the verification code expires before requesting a new one",
         });
       }
+
       verification.emailOtp = otp;
       verification.emailOtpExpiry = otpExpiry;
       message = "Verification code resent successfully";
     } else {
-      // Create record
+      // Create new record
       verification = customerVerificationRepo.create({
         email,
         emailOtp: otp,
@@ -385,13 +401,13 @@ export const verifyEmailCode = async (req: Request, res: Response): Promise<any>
 
     // Check Email Exists
     const verification = await customerVerificationRepo.findOne({
-      where: { email: validEmail },
+      where: { email: validEmail, isDelete: false },
     });
 
     if (!verification) {
       return res.status(404).json({
         success: false,
-        message: "Verification record not found. Please request a new code.",
+        message: "Email not found. Please request a new code.",
       });
     }
 
@@ -438,54 +454,6 @@ export const verifyEmailCode = async (req: Request, res: Response): Promise<any>
   }
 };
 
-export const checkCustomerExist = async (
-  req: Request,
-  res: Response
-): Promise<any> => {
-  try {
-    const email = req.body.email?.trim().toLowerCase();
-    
-    // Check User Exists
-    const userExist = await userRepo.findOne({
-      where: {
-        email,
-        isDelete: false
-      },
-    });
-
-    if (userExist) {
-      return res.status(200).json({
-        success: false,
-        exists: true,
-        message: "This email is already registered in the system",
-      });
-    }
-
-    const verificationExist = await customerVerificationRepo.findOne({
-      where: { email, isEmailVerified: true },
-    });
-
-    if (verificationExist) {
-      return res.status(200).json({
-        success: false,
-        exists: true,
-        message: "This email is already verified",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      exists: false,
-      message: "Email is available",
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-};
-
 export const isCustomerVerified = async (
   req: Request,
   res: Response
@@ -506,14 +474,14 @@ export const isCustomerVerified = async (
     // Check Email
     const verificationByEmail = email
       ? await customerVerificationRepo.findOne({
-          where: { email },
+          where: { email, isDelete: false },
         })
       : null;
 
     // Check Phone Number
     const verificationByPhone = phoneNumber
       ? await customerVerificationRepo.findOne({
-          where: countryCode ? { phoneNumber, countryCode } : { phoneNumber },
+          where: countryCode ? { phoneNumber, countryCode , isDelete: false } : { phoneNumber, isDelete: false },
         })
       : null;
 
@@ -580,52 +548,63 @@ export const sendPhoneVerificationCode = async (req: Request, res: Response): Pr
       });
     }
 
+    if(verificationId && existingPhoneVerification && existingPhoneVerification.id !== verificationId){
+      return res.status(409).json({
+        success: false,
+        message: "This phone number is already in use"
+      })
+    }
+
     let verification: CustomerVerification | null = null;
     let message = "Verification code sent successfully";
 
     if (verificationId) {
+      // Find by verification ID
       verification = await customerVerificationRepo.findOne({
         where: { id: verificationId },
       });
+      
       if (!verification) {
         return res.status(404).json({
           success: false,
           message: "Verification record not found",
         });
       }
-      if (verification.phoneCodeSentAt) {
-        const timeSinceLastCode = Date.now() - verification.phoneCodeSentAt.getTime();
-        const fiveMinutes = 5 * 60 * 1000;
-        if (timeSinceLastCode < fiveMinutes) {
-          return res.status(429).json({
-            success: false,
-            message: "Please wait until the verification code expires before requesting a new one",
-          });
-        }
+      // Check rate limiting
+      if (verification.phoneOtpExpiry && verification.phoneOtpExpiry > new Date()) {
+        return res.status(429).json({
+          success: false,
+          message: "Please wait until the verification code expires before requesting a new one",
+        });
       }
+
+      // Find New Request or Resend Request
+      const isResend = verification.phoneNumber === phoneNumber && verification.countryCode === countryCode;
+      message = isResend ? "Verification code resent successfully" : "Verification code sent successfully";
+
       // Update phone on existing record
       verification.phoneNumber = phoneNumber;
       verification.countryCode = countryCode;
-      message = "Verification code resent successfully";
+      verification.phoneOtpExpiry = new Date(Date.now() + 5 * 60 * 1000);
     } else if (existingPhoneVerification) {
-      // Use existing phone
+      // Use existing phone verification record
       verification = existingPhoneVerification;
-      if (verification.phoneCodeSentAt) {
-        const timeSinceLastCode = Date.now() - verification.phoneCodeSentAt.getTime();
-        const fiveMinutes = 5 * 60 * 1000;
-        if (timeSinceLastCode < fiveMinutes) {
-          return res.status(429).json({
-            success: false,
-            message: "Please wait until the verification code expires before requesting a new one",
-          });
-        }
+
+      // Check rate limiting
+      if (verification.phoneOtpExpiry && verification.phoneOtpExpiry > new Date()) {
+        return res.status(429).json({
+          success: false,
+          message: "Please wait until the verification code expires before requesting a new one",
+        });
       }
       message = "Verification code resent successfully";
+      verification.phoneOtpExpiry = new Date(Date.now() + 5 * 60 * 1000)
     } else {
       // Create New Record
       verification = customerVerificationRepo.create({
         phoneNumber,
         countryCode,
+        phoneOtpExpiry: new Date(Date.now() + 5 * 60 * 1000),
         isPhoneVerified: false
       });
     }
@@ -645,8 +624,6 @@ export const sendPhoneVerificationCode = async (req: Request, res: Response): Pr
         channel: "sms",
       });
 
-    // Update phoneCodeSentAt
-    verification.phoneCodeSentAt = new Date();
     await customerVerificationRepo.save(verification);
 
     return res.status(200).json({
@@ -681,7 +658,7 @@ export const verifyPhoneVerificationCode = async (req: Request, res: Response): 
 
     // Check Phone Number Exists
     const verification = await customerVerificationRepo.findOne({
-      where: { phoneNumber, countryCode },
+      where: { phoneNumber, countryCode, isDelete: false },
     });
 
     if (!verification) {
@@ -723,7 +700,7 @@ export const verifyPhoneVerificationCode = async (req: Request, res: Response): 
 
     // Mark phone as verified
     verification.isPhoneVerified = true;
-    verification.phoneCodeSentAt = null;
+    verification.phoneOtpExpiry = null;
     await customerVerificationRepo.save(verification);
 
     return res.status(201).json({
