@@ -124,10 +124,10 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   if (user.isDelete) {
     return res.status(403).json({ message: "Account has been deactivated" });
   }
-  // ❌ If user is not verified
-  if (!user.isVarified) {
-    return res.status(403).json({ message: "Account is not verified. Please check your email for verification instructions." });
-  }
+  // // ❌ If user is not verified
+  // if (!user.isVarified) {
+  //   return res.status(403).json({ message: "Account is not verified. Please check your email for verification instructions." });
+  // }
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
